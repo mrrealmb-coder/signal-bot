@@ -1,0 +1,39 @@
+name: Дохио шалгах
+
+on:
+  schedule:
+    # 30 минут тутам (цаг бүрийн 07, 37 минутад). Цагийн лаа хаагдсанаас 7 минутын дараа шалгана.
+    - cron: "7,37 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: signal-bot
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Дохио шалгаж Telegram руу илгээх
+        run: python signal_bot.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TWELVEDATA_KEY: ${{ secrets.TWELVEDATA_KEY }}
+
+      - name: Илгээсэн дохиог тэмдэглэх
+        if: always()
+        run: |
+          git config user.name "signal-bot"
+          git config user.email "signal-bot@users.noreply.github.com"
+          git add state.json || true
+          git diff --cached --quiet || (git commit -m "Дохионы төлөв шинэчлэв" && git push)
