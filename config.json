@@ -3,30 +3,6 @@
   "watch": [
     {
       "pair": "XAUUSD",
-      "tf": "1h"
-    },
-    {
-      "pair": "EURUSD",
-      "tf": "1h"
-    },
-    {
-      "pair": "USDJPY",
-      "tf": "1h"
-    },
-    {
-      "pair": "AUDUSD",
-      "tf": "1h"
-    },
-    {
-      "pair": "AUDCAD",
-      "tf": "1h"
-    },
-    {
-      "pair": "CADJPY",
-      "tf": "1h"
-    },
-    {
-      "pair": "XAUUSD",
       "tf": "15m"
     },
     {
