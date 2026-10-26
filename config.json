@@ -1,0 +1,29 @@
+{
+  "_тайлбар": "Хянах хослол ба хугацаа. pair: XAUUSD, EURUSD, USDJPY, AUDUSD, AUDCAD, CADJPY, ETHUSD. tf: 30m, 1h, 4h, 1d (бот 30 минут тутам шалгадаг тул 1m–15m утгагүй). Twelve Data-ийн үнэгүй лимит өдөрт 800 тул валютын мөрийг 10-аас бүү хэтрүүл.",
+  "watch": [
+    {
+      "pair": "XAUUSD",
+      "tf": "1h"
+    },
+    {
+      "pair": "EURUSD",
+      "tf": "1h"
+    },
+    {
+      "pair": "USDJPY",
+      "tf": "1h"
+    },
+    {
+      "pair": "AUDUSD",
+      "tf": "1h"
+    },
+    {
+      "pair": "AUDCAD",
+      "tf": "1h"
+    },
+    {
+      "pair": "CADJPY",
+      "tf": "1h"
+    }
+  ]
+}
