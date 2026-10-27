@@ -140,6 +140,23 @@ def fetch_bars(pair_key, tf, td_key):
     return fetch_twelve(p["sym"], tf, td_key)
 
 
+def aggregate(bars, step_ms, tf):
+    """Жижиг лааг том хугацааны лаа болгон нэгтгэнэ (UTC-ээр зэрэгцүүлнэ). Эхний бүтэн биш лааг хаяна."""
+    big = TF[tf][0] * 1000
+    out = []
+    for b in bars:
+        start = (b["ct"] + 1 - step_ms) // big * big
+        if out and out[-1]["start"] == start:
+            o = out[-1]
+            o["h"], o["l"], o["c"] = max(o["h"], b["h"]), min(o["l"], b["l"]), b["c"]
+            o["n"] += 1
+        else:
+            out.append({"start": start, "h": b["h"], "l": b["l"], "c": b["c"], "ct": start + big - 1, "n": 1})
+    if out and out[0]["n"] < big // step_ms:
+        out = out[1:]
+    return [{"h": o["h"], "l": o["l"], "c": o["c"], "ct": o["ct"]} for o in out]
+
+
 # ---------------------------------------------------------------- Индикатор (TradingView-ийн томьёо)
 
 def ema(src, length):
@@ -304,18 +321,11 @@ def limit_order(bars, tr, now_ms, step_ms):
 
 # ---------------------------------------------------------------- SMC
 
-def smc_setup(bars, now_ms, step_ms):
-    """Хамгийн сүүлийн бүтцийн эвдрэл (BOS/CHoCH)-ээс SMC оролтын санаа гаргаж, төлөвийг нь буцаана.
-
-    Өсөх эвдрэл: хаалт сүүлийн swing high-аас дээш гарна. Order Block = swing high-аас эвдрэл хүртэлх
-    хамгийн нам ёроолтой лаа. Limit оролт = OB-ийн дээд хил (OB өндөр бол дунд), SL = OB-ийн доор.
-    Буурах эвдрэл нь эсрэгээрээ.
-    """
-    n, k = len(bars), SMC["swing"]
-    a = atr(bars, RULES["atr"])
-    last_closed = n - 1 if bars[-1]["ct"] < now_ms else n - 2
+def smc_structure(bars, last_closed):
+    """Swing high/low-ийг тодорхойлж бүх бүтцийн эвдрэлийг (BOS/CHoCH) болон лаа бүрийн чигийг буцаана."""
+    k = SMC["swing"]
     sh = sl_ = None          # {"price", "idx", "broken"}
-    trend, event = 0, None
+    trend, events, trends = 0, [], [0] * len(bars)
     for i in range(last_closed + 1):
         j = i - k
         if j >= k:
@@ -330,14 +340,56 @@ def smc_setup(bars, now_ms, step_ms):
             kind = "CHoCH" if trend == -1 else "BOS"
             seg = range(sh["idx"] + 1, i + 1)
             ob = min(seg, key=lambda x: bars[x]["l"])
-            event = {"dir": 1, "kind": kind, "idx": i, "level": sh["price"], "level_idx": sh["idx"], "ob": ob}
+            events.append({"dir": 1, "kind": kind, "idx": i, "level": sh["price"], "level_idx": sh["idx"], "ob": ob})
             sh["broken"], trend = True, 1
         elif sl_ and not sl_["broken"] and c < sl_["price"]:
             kind = "CHoCH" if trend == 1 else "BOS"
             seg = range(sl_["idx"] + 1, i + 1)
             ob = max(seg, key=lambda x: bars[x]["h"])
-            event = {"dir": -1, "kind": kind, "idx": i, "level": sl_["price"], "level_idx": sl_["idx"], "ob": ob}
+            events.append({"dir": -1, "kind": kind, "idx": i, "level": sl_["price"], "level_idx": sl_["idx"], "ob": ob})
             sl_["broken"], trend = True, -1
+        trends[i] = trend
+    return events, trends
+
+
+def htf_trend_fn(htf_bars, now_ms):
+    """Том хугацааны бүтцийн чигийг t мөчид (тэр үед хаагдсан сүүлийн лаагаар) буцаах функц."""
+    n = len(htf_bars)
+    last_closed = n - 1 if htf_bars[-1]["ct"] < now_ms else n - 2
+    _, trends = smc_structure(htf_bars, last_closed)
+    closes = [b["ct"] for b in htf_bars[:last_closed + 1]]
+
+    def at(t):
+        lo, hi = 0, len(closes)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if closes[mid] < t:
+                lo = mid + 1
+            else:
+                hi = mid
+        return trends[lo - 1] if lo > 0 else 0
+    return at
+
+
+def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None):
+    """Шүүлтүүрт таарсан хамгийн сүүлийн бүтцийн эвдрэлээс SMC оролтын санаа гаргаж, төлөвийг нь буцаана.
+
+    Өсөх эвдрэл: хаалт сүүлийн swing high-аас дээш гарна. Order Block = swing high-аас эвдрэл хүртэлх
+    хамгийн нам ёроолтой лаа. Limit оролт = OB-ийн дээд хил (OB өндөр бол дунд), SL = OB-ийн доор.
+    Буурах эвдрэл нь эсрэгээрээ. kinds: аль төрлийн эвдрэлийг авах; htf: том хугацааны чигийн функц.
+    """
+    n = len(bars)
+    a = atr(bars, RULES["atr"])
+    last_closed = n - 1 if bars[-1]["ct"] < now_ms else n - 2
+    events, _ = smc_structure(bars, last_closed)
+    event = None
+    for ev in reversed(events):
+        if ev["kind"] not in kinds:
+            continue
+        if htf and htf(bars[ev["idx"]]["ct"] + 1) != ev["dir"]:
+            continue
+        event = ev
+        break
     if not event or math.isnan(a[event["idx"]]):
         return None
 
@@ -636,6 +688,8 @@ def smc_message(pair_key, tf, S, price, cancel_prev=None):
         f"Эвдэрсэн цаг: {fmt_time(S['time'])}",
         f"{ob_name}: {fmt_p(S['ob'][0], dec)} – {fmt_p(S['ob'][1], dec)}",
     ]
+    if S.get("htf_tf"):
+        lines.append(f"Том хугацааны чиг: {TF[S['htf_tf']][4]} · {'өсөх ↑' if S['dir'] == 1 else 'буурах ↓'}")
     if S["fvg"]:
         lines.append(f"FVG: {fmt_p(S['fvg'][0], dec)} – {fmt_p(S['fvg'][1], dec)}")
     lines += [
@@ -745,8 +799,10 @@ def main():
                 print(f"  → EMA {rec.get('status')} → {order['status']}")
             rec["status"] = order["status"]
 
-    def track_smc(key, w, bars, price, now_ms, step_ms):
-        S = smc_setup(bars, now_ms, step_ms)
+    def track_smc(key, w, bars, price, now_ms, step_ms, kinds, htf, htf_tf):
+        S = smc_setup(bars, now_ms, step_ms, kinds, htf)
+        if S:
+            S["htf_tf"] = htf_tf
         if not S:
             print(f"{key}: SMC бүтэц алга")
             return
@@ -771,30 +827,53 @@ def main():
     errors, now_ms = [], int(time.time() * 1000)
     last_fetch = load_json(FETCH_FILE, {})
     minute = int(now_ms // 60000)
+    cache, td_due = {}, {}
+
+    def get_bars(pair, tf):
+        if (pair, tf) not in cache:
+            if PAIRS[pair]["src"] == "td" and tf in ("1h", "4h"):
+                # Twelve Data-ийн лимит хэмнэх: 15 минутын лаанаас 1 цаг, 4 цагийг нэгтгэж гаргана
+                cache[(pair, tf)] = aggregate(get_bars(pair, "15m"), TF["15m"][0] * 1000, tf)
+            else:
+                cache[(pair, tf)] = fetch_bars(pair, tf, td_key)
+        return cache[(pair, tf)]
+
     for w in watch:
-        key = f"{w['pair']}|{w['tf']}"
+        pair, tf = w["pair"], w["tf"]
+        key = f"{pair}|{tf}"
         # Binance (алт, ETH) минут тутам; Twelve Data-ийн өдрийн лимитийг хэмнэхийн тулд валют 5 минут тутам
-        if PAIRS[w["pair"]]["src"] == "td":
-            prev = last_fetch.get(key, 0)
-            on_grid = (minute - 2) % TD_EVERY_MIN == 0
-            if minute - prev < TD_EVERY_MIN and not (on_grid and minute != prev):
+        if PAIRS[pair]["src"] == "td":
+            if pair not in td_due:
+                prev = last_fetch.get(pair, 0)
+                on_grid = (minute - 2) % TD_EVERY_MIN == 0
+                td_due[pair] = not (minute - prev < TD_EVERY_MIN and not (on_grid and minute != prev))
+                if td_due[pair]:
+                    last_fetch[pair] = minute
+            if not td_due[pair]:
                 continue
-            last_fetch[key] = minute
+        step_ms = TF[tf][0] * 1000
         try:
-            bars = fetch_bars(w["pair"], w["tf"], td_key)
-            if len(bars) < RULES["trend"] + 5:
+            bars = get_bars(pair, tf)
+            if len(bars) < 60:
                 raise DataError(f"{key}: өгөгдөл хүрэлцэхгүй ({len(bars)} лаа)")
-            res = analyze(bars, now_ms)
         except Exception as e:  # noqa: BLE001
             errors.append(str(e))
             print("АЛДАА", key, e)
             continue
-        step_ms = TF[w["tf"]][0] * 1000
-        track_ema(key, w, bars, res, now_ms, step_ms)
-        try:
-            track_smc(key, w, bars, res["price"], now_ms, step_ms)
-        except Exception as e:  # noqa: BLE001
-            print("SMC АЛДАА", key, e)
+        if w.get("ema", True):
+            if len(bars) >= RULES["trend"] + 5:
+                track_ema(key, w, bars, analyze(bars, now_ms), now_ms, step_ms)
+            else:
+                print(f"{key}: EMA-д лаа хүрэлцэхгүй ({len(bars)})")
+        if w.get("smc", True):
+            try:
+                htf_tf, htf = w.get("smc_htf"), None
+                if htf_tf:
+                    htf = htf_trend_fn(get_bars(pair, htf_tf), now_ms)
+                kinds = tuple(w.get("smc_kinds", ["BOS", "CHoCH"]))
+                track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, htf, htf_tf)
+            except Exception as e:  # noqa: BLE001
+                print("SMC АЛДАА", key, e)
 
     today = datetime.now(UB).strftime("%Y-%m-%d")
     if errors and state.get("error_day") != today:
