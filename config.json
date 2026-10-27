@@ -1,5 +1,5 @@
 {
-  "_тайлбар": "Хослол бүрт: tf = лааны хугацаа; ema = EMA дохио илгээх эсэх; smc = SMC санаа илгээх эсэх; smc_kinds = [\"BOS\"] эсвэл [\"BOS\", \"CHoCH\"]; smc_htf = том хугацааны чигийн шүүлтүүр (1h, 4h эсвэл null). 90 хоногийн туршилтаар хамгийн сайн: SMC зөвхөн BOS + том хугацааны чиг. EMA огтлолцол туршилтаар ашиггүй гарсан тул зөвхөн 1 цаг дээр мэдээлэл болгон үлдээв. pair: XAUUSD, EURUSD, USDJPY, AUDUSD, AUDCAD, CADJPY, ETHUSD. Twelve Data-ийн хослол (алт, ETH-ээс бусад) бүр өдөрт ~290 хүсэлт зарцуулна, лимит 800 тул 2 валютаас хэтрүүлж болохгүй.",
+  "_тайлбар": "Хослол бүрт: tf = лааны хугацаа; ema = EMA дохио илгээх эсэх; smc = SMC санаа илгээх эсэх; smc_kinds = [\"BOS\"] эсвэл [\"BOS\", \"CHoCH\"]; smc_htf = том хугацааны чигийн шүүлтүүр (1h, 4h эсвэл null). 90 хоногийн хатуу туршилтаар зөвхөн алтны SMC (BOS + том хугацааны чиг) тогтвортой ашигтай гарсан. EUR/USD дээр 11 хувилбар туршаад нэг нь ч ашигтай гараагүй тул валютыг унтраав. pair: XAUUSD, EURUSD, USDJPY, AUDUSD, AUDCAD, CADJPY, ETHUSD.",
   "watch": [
     {
       "pair": "XAUUSD",
@@ -13,46 +13,6 @@
     },
     {
       "pair": "XAUUSD",
-      "tf": "1h",
-      "ema": true,
-      "smc": true,
-      "smc_kinds": [
-        "BOS"
-      ],
-      "smc_htf": "4h"
-    },
-    {
-      "pair": "EURUSD",
-      "tf": "15m",
-      "ema": false,
-      "smc": true,
-      "smc_kinds": [
-        "BOS"
-      ],
-      "smc_htf": "1h"
-    },
-    {
-      "pair": "EURUSD",
-      "tf": "1h",
-      "ema": true,
-      "smc": true,
-      "smc_kinds": [
-        "BOS"
-      ],
-      "smc_htf": "4h"
-    },
-    {
-      "pair": "USDJPY",
-      "tf": "15m",
-      "ema": false,
-      "smc": true,
-      "smc_kinds": [
-        "BOS"
-      ],
-      "smc_htf": "1h"
-    },
-    {
-      "pair": "USDJPY",
       "tf": "1h",
       "ema": true,
       "smc": true,
