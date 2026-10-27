@@ -409,25 +409,92 @@ def chat_name(chat):
 
 
 def sync_chats(token, state):
-    """Шинэ хүлээн авагчдыг (Start дарсан хүн, бот нэмэгдсэн групп) олж, /stop бичсэнийг хасна."""
+    """Telegram-ийн шинэ үйлдлүүдийг боловсруулна.
+
+    Шинэ хүн Start дарах эсвэл ботыг группт нэмэхэд эзэмшигчид "Зөвшөөрөх / Татгалзах" товчтой
+    хүсэлт очно. Зөвхөн эзэмшигчийн зөвшөөрсөн чатууд дохио авна. /stop бичсэн чат хасагдана.
+    Эзэмшигчийн командууд: /list, /remove <id>, /approve <id>, /deny <id>
+    """
     chats = state.setdefault("chat_ids", [])
     if state.get("chat_id") and state["chat_id"] not in chats:
         chats.insert(0, state["chat_id"])
     state.pop("chat_id", None)
-    owner = chats[0] if chats else None
+    if not state.get("owner") and chats:
+        state["owner"] = chats[0]
+    pending = state.setdefault("pending", {})
+    names = state.setdefault("names", {})
     try:
         upd = tg(token, "getUpdates", offset=state.get("update_offset", 0), timeout=0)
     except Exception as e:  # noqa: BLE001
         print("Telegram getUpdates алдаа:", e)
         return
+
+    def owner_msg(text, buttons=None):
+        if not state.get("owner"):
+            return
+        params = {}
+        if buttons:
+            params["reply_markup"] = json.dumps({"inline_keyboard": [buttons]})
+        try:
+            tg(token, "sendMessage", chat_id=state["owner"], text=text, **params)
+        except Exception as e:  # noqa: BLE001
+            print("Эзэмшигчид илгээж чадсангүй:", e)
+
+    def decide(act, cid):
+        name = pending.pop(cid, None) or names.get(cid, cid)
+        if act == "approve":
+            if cid in chats:
+                owner_msg(f"ℹ️ {name} аль хэдийн нэмэгдсэн байна.")
+            elif try_send(token, cid, WELCOME):
+                chats.append(cid)
+                owner_msg(f"✅ {name} зөвшөөрөгдлөө. Одоогоос дохио авна.")
+            else:
+                owner_msg(f"⚠️ {name} руу бичиж чадсангүй (ботыг блоклосон байж магадгүй).")
+        elif act == "deny":
+            try_send(token, cid, "🚫 Таны хүсэлтийг зөвшөөрсөнгүй.")
+            owner_msg(f"❌ {name}-ийн хүсэлтийг татгалзлаа.")
+        elif act == "remove":
+            if cid in chats and cid != state.get("owner"):
+                chats.remove(cid)
+                try_send(token, cid, "🔕 Таныг дохио хүлээн авагчдаас хаслаа.")
+                owner_msg(f"➖ {name} хасагдлаа.")
+            else:
+                owner_msg("Ийм хүлээн авагч алга.")
+
     for u in upd.get("result", []):
         state["update_offset"] = u["update_id"] + 1
+
+        cq = u.get("callback_query")
+        if cq:
+            try:
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+            except Exception:  # noqa: BLE001
+                pass  # хуучирсан товч, асуудалгүй
+            data = cq.get("data") or ""
+            if str(cq["from"]["id"]) == state.get("owner") and ":" in data:
+                act, cid = data.split(":", 1)
+                decide(act, cid)
+            continue
+
         m = u.get("message") or u.get("channel_post")
         mcm = u.get("my_chat_member")
-        chat, joined, left = None, False, False
+        chat, joined, left, by_owner = None, False, False, False
         if m:
             chat = m["chat"]
-            if (m.get("text") or "").startswith("/stop"):
+            text = (m.get("text") or "").strip()
+            cid = str(chat["id"])
+            if cid == state.get("owner"):
+                parts = text.split()
+                cmd = parts[0].split("@")[0] if parts else ""
+                if cmd == "/list":
+                    others = [f"{names.get(c, c)} (id {c})" for c in chats if c != cid]
+                    owner_msg("📋 Хүлээн авагчид:\n" + ("\n".join(others) if others else "Зөвхөн та.")
+                              + ("\n\n⏳ Хүлээгдэж буй: " + ", ".join(f"{v} (id {k})" for k, v in pending.items())
+                                 if pending else ""))
+                elif cmd in ("/approve", "/deny", "/remove") and len(parts) > 1:
+                    decide(cmd[1:], parts[1])
+                continue
+            if text.startswith("/stop"):
                 left = True
             else:
                 joined = True
@@ -436,22 +503,41 @@ def sync_chats(token, state):
             st = mcm["new_chat_member"]["status"]
             joined = st in ("member", "administrator")
             left = st in ("left", "kicked")
+            by_owner = str(mcm.get("from", {}).get("id")) == state.get("owner")
         if not chat:
             continue
         cid = str(chat["id"])
-        if left and cid in chats:
-            chats.remove(cid)
-            if mcm is None:
-                try_send(token, cid, "🔕 Мэдэгдэл зогслоо. Дахин авах бол /start гэж бичнэ үү.")
-            print("Хүлээн авагч хасагдлаа:", chat_name(chat))
-        elif joined and cid not in chats:
-            if not try_send(token, cid, WELCOME):
-                continue
-            chats.append(cid)
-            if owner and owner != cid:
-                try_send(token, owner, f"➕ Шинэ хүлээн авагч нэмэгдлээ: {chat_name(chat)}")
-            owner = owner or cid
-            print("Шинэ хүлээн авагч:", chat_name(chat))
+        name = chat_name(chat)
+        names[cid] = name
+
+        if left:
+            pending.pop(cid, None)
+            if cid in chats:
+                chats.remove(cid)
+                if mcm is None:
+                    try_send(token, cid, "🔕 Мэдэгдэл зогслоо. Дахин авах бол /start гэж бичнэ үү.")
+                owner_msg(f"➖ {name} дохио авахаа больсон.")
+            continue
+        if not joined or cid in chats:
+            continue
+        if not state.get("owner"):
+            # хамгийн анхны хэрэглэгч эзэмшигч болно
+            state["owner"] = cid
+            if try_send(token, cid, WELCOME):
+                chats.append(cid)
+            continue
+        if by_owner:
+            decide("approve", cid)
+            continue
+        if cid in pending:
+            continue
+        pending[cid] = name
+        try_send(token, cid, "⏳ Хүсэлтийг илгээлээ. Эзэмшигч зөвшөөрсний дараа дохио ирж эхэлнэ.")
+        kind = "групп" if chat.get("type") in ("group", "supergroup", "channel") else "хүн"
+        owner_msg(f"🙋 Шинэ хүсэлт ({kind}): {name}\nid: {cid}\nДохио авахыг зөвшөөрөх үү?",
+                  [{"text": "✅ Зөвшөөрөх", "callback_data": f"approve:{cid}"},
+                   {"text": "❌ Татгалзах", "callback_data": f"deny:{cid}"}])
+        print("Шинэ хүсэлт:", name)
 
 
 def try_send(token, chat_id, text):
