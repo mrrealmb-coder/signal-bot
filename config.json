@@ -1,17 +1,65 @@
 {
-  "_тайлбар": "Хянах хослол ба хугацаа. pair: XAUUSD, EURUSD, USDJPY, AUDUSD, AUDCAD, CADJPY, ETHUSD. tf: 15m, 30m, 1h, 4h, 1d (бот 15 минут тутам шалгадаг тул 1m, 5m утгагүй). Twelve Data-ийн үнэгүй лимит өдөрт 800, минутад 8 тул валютын мөрийг (алт, ETH-ээс бусад) 7-оос бүү хэтрүүл.",
+  "_тайлбар": "Хослол бүрт: tf = лааны хугацаа; ema = EMA дохио илгээх эсэх; smc = SMC санаа илгээх эсэх; smc_kinds = [\"BOS\"] эсвэл [\"BOS\", \"CHoCH\"]; smc_htf = том хугацааны чигийн шүүлтүүр (1h, 4h эсвэл null). 90 хоногийн туршилтаар хамгийн сайн: SMC зөвхөн BOS + том хугацааны чиг. EMA огтлолцол туршилтаар ашиггүй гарсан тул зөвхөн 1 цаг дээр мэдээлэл болгон үлдээв. pair: XAUUSD, EURUSD, USDJPY, AUDUSD, AUDCAD, CADJPY, ETHUSD. Twelve Data-ийн хослол (алт, ETH-ээс бусад) бүр өдөрт ~290 хүсэлт зарцуулна, лимит 800 тул 2 валютаас хэтрүүлж болохгүй.",
   "watch": [
     {
       "pair": "XAUUSD",
-      "tf": "15m"
+      "tf": "15m",
+      "ema": false,
+      "smc": true,
+      "smc_kinds": [
+        "BOS"
+      ],
+      "smc_htf": "1h"
+    },
+    {
+      "pair": "XAUUSD",
+      "tf": "1h",
+      "ema": true,
+      "smc": true,
+      "smc_kinds": [
+        "BOS"
+      ],
+      "smc_htf": "4h"
     },
     {
       "pair": "EURUSD",
-      "tf": "15m"
+      "tf": "15m",
+      "ema": false,
+      "smc": true,
+      "smc_kinds": [
+        "BOS"
+      ],
+      "smc_htf": "1h"
+    },
+    {
+      "pair": "EURUSD",
+      "tf": "1h",
+      "ema": true,
+      "smc": true,
+      "smc_kinds": [
+        "BOS"
+      ],
+      "smc_htf": "4h"
     },
     {
       "pair": "USDJPY",
-      "tf": "15m"
+      "tf": "15m",
+      "ema": false,
+      "smc": true,
+      "smc_kinds": [
+        "BOS"
+      ],
+      "smc_htf": "1h"
+    },
+    {
+      "pair": "USDJPY",
+      "tf": "1h",
+      "ema": true,
+      "smc": true,
+      "smc_kinds": [
+        "BOS"
+      ],
+      "smc_htf": "4h"
     }
   ]
 }
