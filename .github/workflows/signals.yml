@@ -1,8 +1,8 @@
 name: Дохио шалгах
 
 # GitHub хуваарьт ажлыг олон удаа алгасдаг тул нэг ажил ~5.5 цаг тасралтгүй ажиллаж,
-# 15 минут тутам (02, 17, 32, 47 минутад) шалгана. Цаг бүр шинэ ажил дараалалд орж,
-# өмнөх нь дуусмагц шууд үргэлжилнэ.
+# 15 минут тутам (02, 17, 32, 47 минутад) шалгана. Дуусахдаа дараагийн ээлжийг өөрөө эхлүүлнэ.
+# Ботыг зогсоох бол: Actions → Дохио шалгах → ⋯ → Disable workflow.
 on:
   schedule:
     - cron: "5 * * * *"
@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: signal-bot
@@ -30,6 +31,7 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TWELVEDATA_KEY: ${{ secrets.TWELVEDATA_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "signal-bot"
           git config user.email "signal-bot@users.noreply.github.com"
@@ -49,3 +51,5 @@ jobs:
             echo "Дараагийн шалгалт: $(TZ=Asia/Ulaanbaatar date -d @$next +%H:%M)"
             sleep $(( next - now ))
           done
+          echo "Дараагийн ээлжийг эхлүүлж байна"
+          gh workflow run signals.yml --ref main || true
