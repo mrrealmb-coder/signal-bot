@@ -17,5 +17,23 @@
       "time": 1793078100000
     }
   },
+  "smc": {
+    "EURUSD|15m": {
+      "dir": -1,
+      "status": "pending",
+      "time": 1793092500000
+    },
+    "USDJPY|15m": {
+      "dir": 1,
+      "status": "pending",
+      "time": 1793081700000
+    },
+    "XAUUSD|15m": {
+      "dir": -1,
+      "status": "pending",
+      "time": 1793079000000
+    }
+  },
+  "smc_announced": true,
   "started": true
 }
