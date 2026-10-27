@@ -825,6 +825,8 @@ def smc_message(pair_key, tf, S, price, cancel_prev=None):
     ]
     if S.get("htf_tf"):
         lines.append(f"Том хугацааны чиг: {TF[S['htf_tf']][4]} · {'өсөх ↑' if S['dir'] == 1 else 'буурах ↓'}")
+    if S.get("sma"):
+        lines.append(f"200 өдрийн чиг: {'өсөх ↑' if S['dir'] == 1 else 'буурах ↓'}")
     if S["fvg"]:
         lines.append(f"FVG: {fmt_p(S['fvg'][0], dec)} – {fmt_p(S['fvg'][1], dec)}")
     lines += [
@@ -987,6 +989,7 @@ def main():
         S = smc_setup(bars, now_ms, step_ms, kinds, htf)
         if S:
             S["htf_tf"] = htf_tf
+            S["sma"] = bool(w.get("smc_sma"))
         if not S:
             print(f"{key}: SMC бүтэц алга")
             return
@@ -1011,7 +1014,7 @@ def main():
     def track_vp(key, w, now_ms):
         step_ms = TF["1h"][0] * 1000
         pbars = [b for b in fetch_binance(VP["sym"], "1h") if market_open(b["ct"] + 1 - step_ms)]
-        daily = [b for b in fetch_binance(VP["sym"], "1d") if (((b["ct"] + 1) // 86400000 - 1 + 3) % 7) != 5]
+        daily = get_daily()
         if len(pbars) < 100 or len(daily) < VP["sma"] + 5:
             raise DataError(f"VP: өгөгдөл хүрэлцэхгүй ({len(pbars)} цаг, {len(daily)} өдөр)")
         rec = state["vp"].get(key)
@@ -1043,6 +1046,13 @@ def main():
     last_fetch = load_json(FETCH_FILE, {})
     minute = int(now_ms // 60000)
     cache, td_due = {}, {}
+
+    def get_daily():
+        """200 өдрийн чигт: PAXG өдрийн лаа (Бямба гарагийг хасна)."""
+        if "daily" not in cache:
+            cache["daily"] = [b for b in fetch_binance(VP["sym"], "1d")
+                              if (((b["ct"] + 1) // 86400000 - 1 + 3) % 7) != 5]
+        return cache["daily"]
 
     def get_bars(pair, tf):
         if (pair, tf) not in cache:
@@ -1090,6 +1100,10 @@ def main():
                 htf_tf, htf = w.get("smc_htf"), None
                 if htf_tf:
                     htf = htf_trend_fn(get_bars(pair, htf_tf), now_ms)
+                if w.get("smc_sma"):
+                    # 200 өдрийн чигийн шүүлтүүр: том хугацааны чиг ба 200 өдрийн чиг хоёулаа таарах ёстой
+                    sma, base = sma_trend_fn(get_daily()), htf
+                    htf = (lambda t, sma=sma, base=base: sma(t) if (base is None or base(t) == sma(t)) else 0)
                 kinds = tuple(w.get("smc_kinds", ["BOS", "CHoCH"]))
                 track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, htf, htf_tf)
             except Exception as e:  # noqa: BLE001
