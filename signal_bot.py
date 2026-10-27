@@ -1,6 +1,7 @@
 """Дохио шалгагч Telegram бот.
 
 Аргууд (config.json-д хослол бүрт асаана):
+  st  = Supertrend (10, 3) + 200 өдрийн чиг (NASDAQ 100, 5 минут): чиг эргэхэд орно, эсрэг эргэхэд гарна
   vp  = Volume Profile + 200 өдрийн чиг (зөвхөн алт, 1 цаг): өмнөх өдрийн Value Area-гаас гарч тогтоход орно
   smc = SMC: BOS-ийн дараа Order Block дээр limit
   ema = доорх EMA дүрэм
@@ -60,6 +61,12 @@ SMC = {
 VP = {"sym": "PAXGUSDT", "step": 1.0, "va": 0.70, "need": 2, "sl_atr": 1.5, "tp_r": 2.0, "hold": 24,
       "sma": 200, "fresh_bars": 2}
 
+# Supertrend (10, 3) + 200 өдрийн чиг. NASDAQ 100-ийн 5 минутын 3 жилийн туршилтаар хамгийн тогтвортой гарсан
+# (+106R / 789 арилжаа, 6 хагас жилийн 5-д ашигтай, зардал 3 дахин нэмэхэд ч ашигтай).
+#   Чиг эргэх лаа хаагдахад, зөвхөн 200 өдрийн SMA-ийн чиглэлд орно. SL = тэр үеийн Supertrend шугам.
+#   Supertrend эсрэг эргэхэд (аль ч чиглэлд) гарна. 240 лаанаас удаан бол хаана.
+ST = {"atr": 10, "factor": 3.0, "hold": 240, "fresh_bars": 2}
+
 # src: "bn" = Binance (түлхүүргүй), "td" = Twelve Data. td_alt = Binance ажиллахгүй үед нөөц.
 PAIRS = {
     # weekend_closed: Binance-ийн XAUT амралтаар ч арилждаг тул брокерын алтны графиктай тааруулж амралтын лааг хасна
@@ -70,6 +77,8 @@ PAIRS = {
     "AUDUSD": {"name": "AUD/USD", "src": "td", "sym": "AUD/USD", "tv": "OANDA:AUDUSD", "dec": 5},
     "AUDCAD": {"name": "AUD/CAD", "src": "td", "sym": "AUD/CAD", "tv": "OANDA:AUDCAD", "dec": 5},
     "CADJPY": {"name": "CAD/JPY", "src": "td", "sym": "CAD/JPY", "tv": "OANDA:CADJPY", "dec": 3},
+    # NASDAQ 100: QQQ ETF-ийн үнээр тооцно (Twelve Data). Брокерын NAS100-ийн нэгж өөр тул SL-ийг хувиар өгнө.
+    "NAS100": {"name": "NASDAQ 100", "src": "td", "sym": "QQQ", "tv": "NASDAQ:QQQ", "dec": 2, "pct": True},
     "ETHUSD": {"name": "ETH/USD", "src": "bn", "sym": "ETHUSDT", "td_alt": "ETH/USD", "tv": "BINANCE:ETHUSDT", "dec": 2},
 }
 
@@ -581,13 +590,71 @@ def vp_outcome(bars, S, now_ms):
     return "open", None, None
 
 
+# ---------------------------------------------------------------- Supertrend + 200 өдрийн чиг
+
+def supertrend(bars):
+    """TradingView ta.supertrend(10, 3)-тай ижил. Буцаах: [(чиглэл 1/-1/0, шугам), ...]."""
+    a = atr(bars, ST["atr"])
+    up = dn = NAN
+    dirn = 1
+    out = []
+    for i, b in enumerate(bars):
+        if math.isnan(a[i]):
+            out.append((0, NAN))
+            continue
+        mid = (b["h"] + b["l"]) / 2
+        bu, bl = mid + ST["factor"] * a[i], mid - ST["factor"] * a[i]
+        pc = bars[i - 1]["c"] if i else b["c"]
+        up = bu if (math.isnan(up) or bu < up or pc > up) else up
+        dn = bl if (math.isnan(dn) or bl > dn or pc < dn) else dn
+        dirn = 1 if b["c"] > up else -1 if b["c"] < dn else dirn
+        out.append((dirn, dn if dirn == 1 else up))
+    return out
+
+
+def st_signal(bars, daily, now_ms):
+    """200 өдрийн чигийн дагуух хамгийн сүүлийн Supertrend эргэлт ба түүний одоогийн төлөв."""
+    closed = [b for b in bars if b["ct"] < now_ms]
+    st = supertrend(closed)
+    trend = sma_trend_fn(daily)
+    for i in range(len(st) - 1, 30, -1):
+        d = st[i][0]
+        if d and st[i - 1][0] and d != st[i - 1][0] and trend(closed[i]["ct"] + 1) == d:
+            break
+    else:
+        return None
+    P = {"dir": d, "time": closed[i]["ct"] + 1, "entry": closed[i]["c"], "sl": st[i][1],
+         "age": len(closed) - 1 - i, "status": "open"}
+    P.update(st_outcome(bars, st, P, now_ms))
+    return P
+
+
+def st_outcome(bars, st, P, now_ms):
+    """Оролтын дараа: SL (одоогийн хаагдаагүй лааг оруулан), Supertrend эсрэг эргэх, эсвэл хугацаа."""
+    d = P["dir"]
+    n = 0
+    for j, b in enumerate(bars):
+        if b["ct"] < P["time"]:
+            continue
+        n += 1
+        if (b["l"] <= P["sl"]) if d == 1 else (b["h"] >= P["sl"]):
+            return {"status": "sl", "close_time": min(b["ct"], now_ms), "exit": P["sl"]}
+        if b["ct"] >= now_ms:
+            break
+        if j < len(st) and st[j][0] and st[j][0] != d:
+            return {"status": "exit", "close_time": b["ct"] + 1, "exit": b["c"]}
+        if n >= ST["hold"]:
+            return {"status": "time", "close_time": b["ct"] + 1, "exit": b["c"]}
+    return {}
+
+
 # ---------------------------------------------------------------- Telegram
 
 def tg(token, method, **params):
     return http_json(f"https://api.telegram.org/bot{token}/{method}", data=params)
 
 
-WELCOME = ("👋 Сайн байна уу! Энэ чатад 📦 Volume Profile дохио, 🧠 SMC санаа ирнэ.\n"
+WELCOME = ("👋 Сайн байна уу! Энэ чатад алтны 📦 VP, 🧠 SMC, NASDAQ-ийн 📈 Supertrend дохио ирнэ.\n"
            "Мэдэгдэл зогсоох бол /stop гэж бичнэ үү.")
 
 
@@ -901,6 +968,48 @@ def vp_close_text(pair_key, tf, rec, status, t_ms, price):
     return f"📦 ⌛ VP хугацаа дууслаа · {h}\n{VP['hold']} цаг өнгөрсөн тул {fmt_p(price, dec)}-д хаана уу ({fmt_time(t_ms)[-5:]}). Үр дүн ≈ {r:+.1f}R"
 
 
+def pct_text(entry, price):
+    return f"{(price - entry) / entry * 100:+.2f}%"
+
+
+def st_message(pair_key, tf, P, price, prev=None):
+    p = PAIRS[pair_key]
+    dec, d = p["dec"], P["dir"]
+    lines = []
+    if prev:
+        lines += [prev, ""]
+    lines += [
+        f"📈 Supertrend · {'🟢 BUY' if d == 1 else '🔴 SELL'}",
+        f"{p['name']} · {TF[tf][4]}",
+        f"Дохио гарсан: {fmt_time(P['time'])}",
+        f"200 өдрийн чиг: {'өсөх ↑' if d == 1 else 'буурах ↓'}",
+        "",
+        f"Оролт (Market): {fmt_p(P['entry'], dec)}" + (f" ({p['sym']})" if p.get("pct") else ""),
+        f"SL: {fmt_p(P['sl'], dec)}  ({pct_text(P['entry'], P['sl'])})",
+        "TP: тогтмол биш. Supertrend эсрэг эргэхэд бот хаах мэдэгдэл илгээнэ.",
+        f"Одоогийн үнэ: {fmt_p(price, dec)}",
+    ]
+    if p.get("pct"):
+        lines.append(f"ℹ️ Брокерын {pair_key} дээр SL-ийг оролтоос {pct_text(P['entry'], P['sl'])} зайд тавина уу.")
+    if P["age"] >= ST["fresh_bars"]:
+        lines.append(f"⚠️ Дохио {P['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
+    lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
+    return "\n".join(lines)
+
+
+def st_close_text(pair_key, tf, rec, out):
+    dec = PAIRS[pair_key]["dec"]
+    h = head(pair_key, tf, rec["dir"])
+    r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
+    t = fmt_time(out["close_time"])[-5:]
+    if out["status"] == "sl":
+        return f"📈 🛑 Supertrend SL цохисон · {h}\nSL {fmt_p(out['exit'], dec)} ({t}). Алдагдал ≈ −1R"
+    if out["status"] == "time":
+        return f"📈 ⌛ Supertrend хугацаа дууслаа · {h}\n{fmt_p(out['exit'], dec)}-д хаана уу ({t}). Үр дүн ≈ {r:+.1f}R"
+    return (f"📈 🏁 Supertrend эргэлээ · {h} хаах\nГарах үнэ: {fmt_p(out['exit'], dec)} ({t}) · "
+            f"{pct_text(rec['entry'], out['exit'])} · Үр дүн ≈ {r:+.1f}R")
+
+
 # ---------------------------------------------------------------- Үндсэн
 
 def load_json(path, default):
@@ -923,6 +1032,7 @@ def main():
     state.setdefault("orders", {})
     state.setdefault("smc", {})
     state.setdefault("vp", {})
+    state.setdefault("st", {})
     state.pop("sent", None)
 
     sync_chats(token, state)
@@ -950,6 +1060,15 @@ def main():
         send("🧠 SMC санаа нэмэгдлээ.\nОдоогоос 📊 EMA дохио ба 🧠 SMC санаа тус тусдаа ирнэ. "
              "SMC санаа нь бүтцийн эвдрэл (BOS/CHoCH)-ийн дараа Order Block дээр Limit оролт санал болгоно.")
         state["smc_announced"] = True
+
+    if not state.get("st_announced") and any(w.get("st") for w in watch):
+        send("📈 Шинэ: NASDAQ 100 · 5 минут · Supertrend + 200 өдрийн чиг\n"
+             "3 жилийн 5 минутын өгөгдөл дээр 11 аргыг туршихад NASDAQ-д хамгийн тогтвортой нь энэ гарлаа.\n"
+             "• Supertrend (10, 3) чиг эргэх 5 минутын лаа хаагдахад орно, зөвхөн 200 өдрийн чигийн дагуу\n"
+             "• SL = Supertrend шугам (хувиар өгнө), Supertrend эсрэг эргэхэд хаах мэдэгдэл ирнэ\n"
+             "• Үнийг QQQ ETF-ээр тооцно, брокерын NAS100 дээр SL-ийг хувиар тавина уу\n"
+             "• Зөвхөн АНУ-ын биржийн цагаар (Монголын ~21:30–04:00), өдөрт ~1 дохио")
+        state["st_announced"] = True
 
     if not state.get("vp_announced") and any(w.get("vp") for w in watch):
         send("📦 Шинэ арга: Volume Profile + 200 өдрийн чиг (алт, 1 цаг)\n"
@@ -1042,10 +1161,46 @@ def main():
             send(prev)
             print("  → VP позиц хаагдлаа")
 
+    def track_st(key, w, bars, now_ms):
+        daily = get_daily_td(w["pair"])
+        if len(daily) < VP["sma"] + 5:
+            raise DataError(f"{key}: өдрийн өгөгдөл хүрэлцэхгүй ({len(daily)})")
+        rec = state["st"].get(key)
+        price = bars[-1]["c"]
+        prev = None
+        if rec and rec.get("status") == "open":
+            out = st_outcome(bars, supertrend([b for b in bars if b["ct"] < now_ms]), rec, now_ms)
+            if out:
+                prev = st_close_text(w["pair"], w["tf"], rec, out)
+                rec["status"] = out["status"]
+        P = st_signal(bars, daily, now_ms)
+        print(f"{key}: Supertrend {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) + ' · ' + P['status'] if P else 'дохио алга'}")
+        if P and (not rec or rec.get("time") != P["time"]) and not (rec and rec.get("status") == "open"):
+            if not rec and P["age"] >= ST["fresh_bars"]:
+                print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
+            elif P["status"] == "open":
+                send(st_message(w["pair"], w["tf"], P, price, prev))
+                print("  → Supertrend дохио илгээлээ")
+                prev = None
+            state["st"][key] = {k: P[k] for k in ("time", "dir", "entry", "sl", "status")}
+        if prev:
+            send(prev)
+            print("  → Supertrend позиц хаагдлаа")
+
     errors, now_ms = [], int(time.time() * 1000)
     last_fetch = load_json(FETCH_FILE, {})
     minute = int(now_ms // 60000)
     cache, td_due = {}, {}
+
+    def get_daily_td(pair):
+        """200 өдрийн чигт Twelve Data-ийн өдрийн лаа. Ажлын дотор цагт нэг удаа л татна (лимит хэмнэнэ)."""
+        k = f"daily:{pair}"
+        hit = last_fetch.get(k)
+        if hit and minute - hit["minute"] < 60:
+            return hit["bars"]
+        bars = fetch_twelve(PAIRS[pair]["sym"], "1d", td_key)
+        last_fetch[k] = {"minute": minute, "bars": bars}
+        return bars
 
     def get_daily():
         """200 өдрийн чигт: PAXG өдрийн лаа (Бямба гарагийг хасна)."""
@@ -1090,6 +1245,11 @@ def main():
                 track_ema(key, w, bars, analyze(bars, now_ms), now_ms, step_ms)
             else:
                 print(f"{key}: EMA-д лаа хүрэлцэхгүй ({len(bars)})")
+        if w.get("st"):
+            try:
+                track_st(key, w, bars, now_ms)
+            except Exception as e:  # noqa: BLE001
+                print("Supertrend АЛДАА", key, e)
         if w.get("vp"):
             try:
                 track_vp(key, w, now_ms)
