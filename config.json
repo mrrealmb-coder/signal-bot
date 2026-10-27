@@ -1,5 +1,5 @@
 {
-  "_тайлбар": "Хослол бүрт: tf = лааны хугацаа; ema = EMA дохио илгээх эсэх; smc = SMC санаа илгээх эсэх; smc_kinds = [\"BOS\"] эсвэл [\"BOS\", \"CHoCH\"]; smc_htf = том хугацааны чигийн шүүлтүүр (1h, 4h эсвэл null). 90 хоногийн хатуу туршилтаар зөвхөн алтны SMC (BOS + том хугацааны чиг) тогтвортой ашигтай гарсан. EUR/USD дээр 11 хувилбар туршаад нэг нь ч ашигтай гараагүй тул валютыг унтраав. pair: XAUUSD, EURUSD, USDJPY, AUDUSD, AUDCAD, CADJPY, ETHUSD.",
+  "_тайлбар": "Хослол бүрт: tf = лааны хугацаа; vp = Volume Profile + 200 өдрийн чиг (зөвхөн алт, 1 цаг); ema = EMA дохио; smc = SMC санаа; smc_kinds = [\"BOS\"] эсвэл [\"BOS\", \"CHoCH\"]; smc_htf = том хугацааны чиг (1h, 4h эсвэл null). 3 жилийн 1 цагийн өгөгдөл дээр 12 аргыг туршихад алтанд Volume Profile + 200 өдрийн чиг хамгийн тогтвортой гарсан (6 хагас жил бүгдэд ашигтай). EMA ба SMC 1 цаг дээр 3 жилд ашиггүй гарсан тул унтраав. EUR/USD, USD/JPY дээр тогтвортой ашигтай арга олдоогүй. pair: XAUUSD, EURUSD, USDJPY, AUDUSD, AUDCAD, CADJPY, ETHUSD.",
   "watch": [
     {
       "pair": "XAUUSD",
@@ -14,12 +14,9 @@
     {
       "pair": "XAUUSD",
       "tf": "1h",
-      "ema": true,
-      "smc": true,
-      "smc_kinds": [
-        "BOS"
-      ],
-      "smc_htf": "4h"
+      "ema": false,
+      "smc": false,
+      "vp": true
     }
   ]
 }
