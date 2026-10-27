@@ -69,6 +69,13 @@
   },
   "smc_announced": true,
   "st": {
+    "NAS100|15m": {
+      "dir": 1,
+      "entry": 708.84998,
+      "sl": 702.7556661749102,
+      "status": "open",
+      "time": 1793024100000
+    },
     "NAS100|5m": {
       "dir": 1,
       "entry": 714.33002,
