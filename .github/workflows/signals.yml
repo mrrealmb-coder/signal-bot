@@ -1,7 +1,7 @@
 name: Дохио шалгах
 
 # GitHub хуваарьт ажлыг олон удаа алгасдаг тул нэг ажил ~5.5 цаг тасралтгүй ажиллаж,
-# 15 минут тутам (02, 17, 32, 47 минутад) шалгана. Дуусахдаа дараагийн ээлжийг өөрөө эхлүүлнэ.
+# минут тутам шалгана (валютыг 5 минут тутам). Дуусахдаа дараагийн ээлжийг өөрөө эхлүүлнэ.
 # Ботыг зогсоох бол: Actions → Дохио шалгах → ⋯ → Disable workflow.
 on:
   schedule:
@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 15 минут тутам дохио шалгаж Telegram руу илгээх
+      - name: Минут тутам дохио шалгаж Telegram руу илгээх
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TWELVEDATA_KEY: ${{ secrets.TWELVEDATA_KEY }}
@@ -46,9 +46,8 @@ jobs:
               git push -q || true
             fi
             now=$(date +%s)
-            next=$(( (now - 120) / 900 * 900 + 900 + 120 ))
+            next=$(( now / 60 * 60 + 65 ))
             if [ "$next" -ge "$end" ]; then break; fi
-            echo "Дараагийн шалгалт: $(TZ=Asia/Ulaanbaatar date -d @$next +%H:%M)"
             sleep $(( next - now ))
           done
           echo "Дараагийн ээлжийг эхлүүлж байна"
