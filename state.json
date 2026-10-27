@@ -3,6 +3,17 @@
     "5371043257",
     "-5363490041"
   ],
+  "dtc": {
+    "XAUUSD|15m": {
+      "dir": -1,
+      "entry": 4010.38,
+      "sl": 4025.86,
+      "status": "sl",
+      "time": 1793079900000,
+      "tp": 3979.42
+    }
+  },
+  "dtc_announced": true,
   "names": {
     "-5363490041": "Mu, Odkoo and Mubbot"
   },
