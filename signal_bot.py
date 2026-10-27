@@ -22,6 +22,8 @@ from datetime import datetime, timedelta, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(HERE, "state.json")
 CONFIG_FILE = os.path.join(HERE, "config.json")
+FETCH_FILE = os.path.join(HERE, "last_fetch.json")  # commit хийгддэггүй, зөвхөн тухайн ажлын дотор
+TD_EVERY_MIN = 5  # Twelve Data-ийн хослолыг 5 минут тутам (02, 07, 12, ... минутад) татна
 UB = timezone(timedelta(hours=8))  # Улаанбаатарын цаг
 
 RULES = {
@@ -767,8 +769,17 @@ def main():
             rec["status"] = S["status"]
 
     errors, now_ms = [], int(time.time() * 1000)
+    last_fetch = load_json(FETCH_FILE, {})
+    minute = int(now_ms // 60000)
     for w in watch:
         key = f"{w['pair']}|{w['tf']}"
+        # Binance (алт, ETH) минут тутам; Twelve Data-ийн өдрийн лимитийг хэмнэхийн тулд валют 5 минут тутам
+        if PAIRS[w["pair"]]["src"] == "td":
+            prev = last_fetch.get(key, 0)
+            on_grid = (minute - 2) % TD_EVERY_MIN == 0
+            if minute - prev < TD_EVERY_MIN and not (on_grid and minute != prev):
+                continue
+            last_fetch[key] = minute
         try:
             bars = fetch_bars(w["pair"], w["tf"], td_key)
             if len(bars) < RULES["trend"] + 5:
@@ -792,6 +803,11 @@ def main():
                  "\nДараагийн шалгалтаар дахин оролдоно. (Өдөрт нэг л удаа анхааруулна.)")
         state["error_day"] = today
 
+    try:
+        with open(FETCH_FILE, "w", encoding="utf-8") as f:
+            json.dump(last_fetch, f)
+    except OSError:
+        pass
     save_state(state)
     return 0
 
