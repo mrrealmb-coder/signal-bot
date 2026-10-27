@@ -398,23 +398,72 @@ def tg(token, method, **params):
     return http_json(f"https://api.telegram.org/bot{token}/{method}", data=params)
 
 
-def resolve_chat_id(token, state):
-    if os.environ.get("TELEGRAM_CHAT_ID"):
-        return os.environ["TELEGRAM_CHAT_ID"]
-    if state.get("chat_id"):
-        return state["chat_id"]
+WELCOME = ("👋 Сайн байна уу! Энэ чатад 📊 EMA дохио ба 🧠 SMC санаа ирнэ.\n"
+           "Мэдэгдэл зогсоох бол /stop гэж бичнэ үү.")
+
+
+def chat_name(chat):
+    if chat.get("title"):
+        return chat["title"]
+    return " ".join(x for x in (chat.get("first_name"), chat.get("last_name")) if x) or chat.get("username") or str(chat["id"])
+
+
+def sync_chats(token, state):
+    """Шинэ хүлээн авагчдыг (Start дарсан хүн, бот нэмэгдсэн групп) олж, /stop бичсэнийг хасна."""
+    chats = state.setdefault("chat_ids", [])
+    if state.get("chat_id") and state["chat_id"] not in chats:
+        chats.insert(0, state["chat_id"])
+    state.pop("chat_id", None)
+    owner = chats[0] if chats else None
     try:
-        upd = tg(token, "getUpdates")
+        upd = tg(token, "getUpdates", offset=state.get("update_offset", 0), timeout=0)
     except Exception as e:  # noqa: BLE001
         print("Telegram getUpdates алдаа:", e)
-        return None
-    for u in reversed(upd.get("result", [])):
-        msg = u.get("message") or u.get("edited_message") or {}
-        chat = msg.get("chat")
-        if chat:
-            state["chat_id"] = str(chat["id"])
-            return state["chat_id"]
-    return None
+        return
+    for u in upd.get("result", []):
+        state["update_offset"] = u["update_id"] + 1
+        m = u.get("message") or u.get("channel_post")
+        mcm = u.get("my_chat_member")
+        chat, joined, left = None, False, False
+        if m:
+            chat = m["chat"]
+            if (m.get("text") or "").startswith("/stop"):
+                left = True
+            else:
+                joined = True
+        elif mcm:
+            chat = mcm["chat"]
+            st = mcm["new_chat_member"]["status"]
+            joined = st in ("member", "administrator")
+            left = st in ("left", "kicked")
+        if not chat:
+            continue
+        cid = str(chat["id"])
+        if left and cid in chats:
+            chats.remove(cid)
+            if mcm is None:
+                try_send(token, cid, "🔕 Мэдэгдэл зогслоо. Дахин авах бол /start гэж бичнэ үү.")
+            print("Хүлээн авагч хасагдлаа:", chat_name(chat))
+        elif joined and cid not in chats:
+            if not try_send(token, cid, WELCOME):
+                continue
+            chats.append(cid)
+            if owner and owner != cid:
+                try_send(token, owner, f"➕ Шинэ хүлээн авагч нэмэгдлээ: {chat_name(chat)}")
+            owner = owner or cid
+            print("Шинэ хүлээн авагч:", chat_name(chat))
+
+
+def try_send(token, chat_id, text):
+    try:
+        tg(token, "sendMessage", chat_id=chat_id, text=text, disable_web_page_preview="true")
+        return True
+    except urllib.error.HTTPError as e:
+        print("Илгээж чадсангүй", chat_id, e.code)
+        return e.code not in (400, 403)
+    except Exception as e:  # noqa: BLE001
+        print("Илгээж чадсангүй", chat_id, e)
+        return True
 
 
 def fmt_p(x, dec):
@@ -557,9 +606,10 @@ def main():
     state.setdefault("smc", {})
     state.pop("sent", None)
 
-    chat_id = resolve_chat_id(token, state)
-    if not chat_id:
-        print("Чат олдсонгүй. Telegram дээр ботдоо /start гэж бичээд дахин ажиллуулна уу.")
+    sync_chats(token, state)
+    chats = state["chat_ids"]
+    if not chats:
+        print("Хүлээн авагч алга. Telegram дээр ботдоо /start гэж бичээд дахин ажиллуулна уу.")
         save_state(state)
         return 1
 
@@ -567,13 +617,15 @@ def main():
 
     if not state.get("started"):
         names = ", ".join(f"{PAIRS[w['pair']]['name']} ({TF[w['tf']][4]})" for w in watch)
-        tg(token, "sendMessage", chat_id=chat_id,
-           text="✅ Дохионы бот ажиллаж эхэллээ.\nХянаж буй: " + names +
-                "\n📊 EMA дохио ба 🧠 SMC санааг тус тусад нь энд мэдэгдэнэ.")
+        try_send(token, chats[0], "✅ Дохионы бот ажиллаж эхэллээ.\nХянаж буй: " + names +
+                 "\n📊 EMA дохио ба 🧠 SMC санааг тус тусад нь энд мэдэгдэнэ.")
         state["started"] = True
 
     def send(text):
-        tg(token, "sendMessage", chat_id=chat_id, text=text, disable_web_page_preview="true")
+        for cid in list(chats):
+            if not try_send(token, cid, text):
+                chats.remove(cid)  # ботыг блоклосон эсвэл группээс хасагдсан
+                print("Хүлээн авагч хасагдлаа:", cid)
 
     if not state.get("smc_announced"):
         send("🧠 SMC санаа нэмэгдлээ.\nОдоогоос 📊 EMA дохио ба 🧠 SMC санаа тус тусдаа ирнэ. "
@@ -649,9 +701,9 @@ def main():
 
     today = datetime.now(UB).strftime("%Y-%m-%d")
     if errors and state.get("error_day") != today:
-        tg(token, "sendMessage", chat_id=chat_id,
-           text="⚠️ Зарим хослолын үнийг татаж чадсангүй:\n" + "\n".join(errors[:5]) +
-                "\nДараагийн шалгалтаар дахин оролдоно. (Өдөрт нэг л удаа анхааруулна.)")
+        try_send(token, chats[0],
+                 "⚠️ Зарим хослолын үнийг татаж чадсангүй:\n" + "\n".join(errors[:5]) +
+                 "\nДараагийн шалгалтаар дахин оролдоно. (Өдөрт нэг л удаа анхааруулна.)")
         state["error_day"] = today
 
     save_state(state)
