@@ -1,5 +1,11 @@
 {
-  "chat_id": "5371043257",
+  "chat_ids": [
+    "5371043257",
+    "-5363490041"
+  ],
+  "names": {
+    "-5363490041": "Mu, Odkoo and Mubbot"
+  },
   "orders": {
     "EURUSD|15m": {
       "dir": 1,
@@ -17,6 +23,8 @@
       "time": 1793078100000
     }
   },
+  "owner": "5371043257",
+  "pending": {},
   "smc": {
     "EURUSD|15m": {
       "dir": -1,
@@ -35,5 +43,6 @@
     }
   },
   "smc_announced": true,
-  "started": true
+  "started": true,
+  "update_offset": 291487573
 }
