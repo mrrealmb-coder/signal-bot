@@ -12,6 +12,11 @@
       "status": "tp",
       "time": 1792953900000
     },
+    "EURUSD|1h": {
+      "dir": -1,
+      "status": "expired",
+      "time": 1793019600000
+    },
     "USDJPY|15m": {
       "dir": 1,
       "status": "tp",
@@ -21,6 +26,11 @@
       "dir": -1,
       "status": "tp",
       "time": 1793078100000
+    },
+    "XAUUSD|1h": {
+      "dir": -1,
+      "status": "tp",
+      "time": 1792425600000
     }
   },
   "owner": "5371043257",
@@ -31,15 +41,30 @@
       "status": "pending",
       "time": 1793092500000
     },
+    "EURUSD|1h": {
+      "dir": -1,
+      "status": "pending",
+      "time": 1793048400000
+    },
     "USDJPY|15m": {
       "dir": 1,
       "status": "pending",
       "time": 1793081700000
     },
-    "XAUUSD|15m": {
+    "USDJPY|1h": {
       "dir": -1,
-      "status": "pending",
-      "time": 1793079000000
+      "status": "tp",
+      "time": 1792713600000
+    },
+    "XAUUSD|15m": {
+      "dir": 1,
+      "status": "sl",
+      "time": 1793007900000
+    },
+    "XAUUSD|1h": {
+      "dir": -1,
+      "status": "tp",
+      "time": 1792670400000
     }
   },
   "smc_announced": true,
