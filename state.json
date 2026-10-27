@@ -68,7 +68,16 @@
     }
   },
   "smc_announced": true,
-  "st": {},
+  "st": {
+    "NAS100|5m": {
+      "dir": 1,
+      "entry": 714.33002,
+      "sl": 711.3252751848866,
+      "status": "open",
+      "time": 1793034900000
+    }
+  },
+  "st_announced": true,
   "started": true,
   "update_offset": 291487573,
   "vp": {
