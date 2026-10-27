@@ -1,5 +1,10 @@
 """Дохио шалгагч Telegram бот.
 
+Аргууд (config.json-д хослол бүрт асаана):
+  vp  = Volume Profile + 200 өдрийн чиг (зөвхөн алт, 1 цаг): өмнөх өдрийн Value Area-гаас гарч тогтоход орно
+  smc = SMC: BOS-ийн дараа Order Block дээр limit
+  ema = доорх EMA дүрэм
+
 buy-sell.html хуудастай яг ижил дүрмээр ажиллана:
   BUY  = EMA20 нь EMA50-ыг доороос дээш огтлох + RSI(14) > 50 + үнэ EMA200-аас дээр + MACD шугам дохионы шугамаас дээр
   SELL = эсрэгээрээ
@@ -9,6 +14,7 @@ buy-sell.html хуудастай яг ижил дүрмээр ажиллана:
 Гадны сан шаардлагагүй, зөвхөн Python 3-ын стандарт сан.
 """
 
+import bisect
 import json
 import math
 import os
@@ -44,9 +50,21 @@ SMC = {
     "valid_bars": 24,    # биелэхгүй бол 24 лааны дараа цуцална (15 минутад 6 цаг)
 }
 
+# Volume Profile + 200 өдрийн чиг. 3 жилийн туршилтаар алтны 1 цагт хамгийн тогтвортой гарсан арга
+# (12 аргаас; 6 хагас жил бүгдэд ашигтай, параметр өөрчлөхөд ч тогтвортой).
+#   1) Өмнөх арилжааны өдрийн (22:00 UTC-ээс) 1 цагийн лаанаас эзэлхүүний профайл → Value Area (70%)
+#   2) Өнөөдөр үнэ VA дотор байснаа гарч, 2 лаа дараалан гадна хаагдвал тэр чиглэлд Market
+#   3) Зөвхөн 200 өдрийн SMA-ийн чигийн дагуу (үнэ SMA-аас дээр бол зөвхөн BUY, доор бол зөвхөн SELL)
+#   4) SL = 1.5 ATR(14), TP = 2R, 24 лааны дотор хүрэхгүй бол хаана. Өдөрт ганц (эхний) дохио.
+# Эзэлхүүнийг PAXGUSDT-аас авна: туршилтаар XAUT-ийн эзэлхүүн ажиллаагүй, PAXG-ийнх ажилласан.
+VP = {"sym": "PAXGUSDT", "step": 1.0, "va": 0.70, "need": 2, "sl_atr": 1.5, "tp_r": 2.0, "hold": 24,
+      "sma": 200, "fresh_bars": 2}
+
 # src: "bn" = Binance (түлхүүргүй), "td" = Twelve Data. td_alt = Binance ажиллахгүй үед нөөц.
 PAIRS = {
-    "XAUUSD": {"name": "Алт XAU/USD", "src": "bn", "sym": "XAUTUSDT", "td_alt": "XAU/USD", "tv": "OANDA:XAUUSD", "dec": 2},
+    # weekend_closed: Binance-ийн XAUT амралтаар ч арилждаг тул брокерын алтны графиктай тааруулж амралтын лааг хасна
+    "XAUUSD": {"name": "Алт XAU/USD", "src": "bn", "sym": "XAUTUSDT", "td_alt": "XAU/USD", "tv": "OANDA:XAUUSD", "dec": 2,
+               "weekend_closed": True},
     "EURUSD": {"name": "EUR/USD", "src": "td", "sym": "EUR/USD", "tv": "OANDA:EURUSD", "dec": 5},
     "USDJPY": {"name": "USD/JPY", "src": "td", "sym": "USD/JPY", "tv": "OANDA:USDJPY", "dec": 3},
     "AUDUSD": {"name": "AUD/USD", "src": "td", "sym": "AUD/USD", "tv": "OANDA:AUDUSD", "dec": 5},
@@ -94,7 +112,7 @@ def fetch_binance(sym, tf):
     for host in BN_HOSTS:
         try:
             rows = http_json(f"{host}/api/v3/klines?symbol={sym}&interval={TF[tf][1]}&limit=1000")
-            return [{"h": float(r[2]), "l": float(r[3]), "c": float(r[4]), "ct": int(r[6])} for r in rows]
+            return [{"h": float(r[2]), "l": float(r[3]), "c": float(r[4]), "ct": int(r[6]), "v": float(r[5])} for r in rows]
         except Exception as e:  # noqa: BLE001
             last_err = e
     raise DataError(f"Binance {sym}: {last_err}")
@@ -128,15 +146,26 @@ def fetch_twelve(sym, tf, key):
     raise DataError(f"Twelve Data {sym}: лимит")
 
 
+def market_open(open_ms):
+    """Алт, валютын зах зээл: Баасан 21:00 UTC-ээс Ням 22:00 UTC хүртэл хаалттай."""
+    wd = (open_ms // 86400000 + 3) % 7  # 0 = Даваа (1970-01-01 нь Пүрэв)
+    hr = (open_ms // 3600000) % 24
+    return not (wd == 5 or (wd == 4 and hr >= 21) or (wd == 6 and hr < 22))
+
+
 def fetch_bars(pair_key, tf, td_key):
     p = PAIRS[pair_key]
     if p["src"] == "bn":
         try:
-            return fetch_binance(p["sym"], tf)
+            bars = fetch_binance(p["sym"], tf)
         except DataError:
             if p.get("td_alt") and td_key:
                 return fetch_twelve(p["td_alt"], tf, td_key)
             raise
+        if p.get("weekend_closed") and TF[tf][0] < 86400:
+            step = TF[tf][0] * 1000
+            bars = [b for b in bars if market_open(b["ct"] + 1 - step)]
+        return bars
     return fetch_twelve(p["sym"], tf, td_key)
 
 
@@ -446,13 +475,119 @@ def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None):
     return setup
 
 
+# ---------------------------------------------------------------- Volume Profile + 200 өдрийн чиг
+
+def day_key(b, step_ms):
+    """Арилжааны өдөр 22:00 UTC (Монголын 06:00)-д солигдоно."""
+    return (b["ct"] + 1 - step_ms + 2 * 3600000) // 86400000
+
+
+def value_area(bars):
+    """Эзэлхүүний профайл → POC, Value Area (VP['va'] хувь)."""
+    step, vol = VP["step"], {}
+    for b in bars:
+        lo, hi = math.floor(b["l"] / step), math.floor(b["h"] / step)
+        for k in range(lo, hi + 1):
+            vol[k] = vol.get(k, 0) + b.get("v", 1.0) / (hi - lo + 1)
+    if not vol:
+        return None
+    keys = sorted(vol)
+    poc = max(keys, key=vol.get)
+    total = sum(vol.values())
+    lo = hi = keys.index(poc)
+    acc = vol[poc]
+    while acc < VP["va"] * total and (lo > 0 or hi < len(keys) - 1):
+        up = vol[keys[hi + 1]] if hi < len(keys) - 1 else -1
+        dn = vol[keys[lo - 1]] if lo > 0 else -1
+        if up >= dn:
+            hi += 1
+            acc += up
+        else:
+            lo -= 1
+            acc += dn
+    return {"poc": (poc + 0.5) * step, "vah": (keys[hi] + 1) * step, "val": keys[lo] * step}
+
+
+def sma_trend_fn(daily):
+    """t хугацаанаас өмнө хаагдсан өдрүүдийн хаалтыг SMA200-тай харьцуулна: +1 дээр, -1 доор, 0 мэдээлэл дутуу."""
+    n = VP["sma"]
+    cts = [b["ct"] for b in daily]
+    sig = []
+    for i, b in enumerate(daily):
+        if i < n - 1:
+            sig.append(0)
+            continue
+        m = sum(x["c"] for x in daily[i - n + 1:i + 1]) / n
+        sig.append(1 if b["c"] > m else -1)
+
+    def f(t):
+        k = bisect.bisect_left(cts, t) - 1
+        return sig[k] if k >= 0 else 0
+    return f
+
+
+def vp_signal(bars, daily, now_ms, step_ms):
+    """Сүүлийн 2 арилжааны өдрийн VP дохионоос хамгийн сүүлийнхийг буцаана (өдөрт зөвхөн эхний эвдрэл)."""
+    closed = [b for b in bars if b["ct"] < now_ms]
+    a = atr(closed, RULES["atr"])
+    trend = sma_trend_fn(daily)
+    days = {}
+    for i, b in enumerate(closed):
+        days.setdefault(day_key(b, step_ms), []).append(i)
+    ks = sorted(days)
+    found = None
+    for p, q in zip(ks[-3:-1], ks[-2:]):
+        va = value_area([closed[i] for i in days[p]])
+        if not va:
+            continue
+        was_in, cnt, cd = False, 0, 0
+        for i in days[q]:
+            c = closed[i]["c"]
+            if va["val"] < c < va["vah"]:
+                was_in, cnt = True, 0
+                continue
+            if not was_in or math.isnan(a[i]):
+                continue
+            d = 1 if c >= va["vah"] else -1
+            cnt = cnt + 1 if d == cd else 1
+            cd = d
+            if cnt == VP["need"]:
+                t = closed[i]["ct"] + 1
+                tr = trend(t)
+                if tr == d:
+                    risk = VP["sl_atr"] * a[i]
+                    found = {"dir": d, "time": t, "entry": c, "sl": c - d * risk, "tp": c + d * VP["tp_r"] * risk,
+                             "va": va, "age": len(closed) - 1 - i}
+                else:
+                    print(f"  VP: {'BUY' if d == 1 else 'SELL'} эвдрэл {fmt_time(t)} — 200 өдрийн чигийн эсрэг тул алгасав")
+                break
+    return found
+
+
+def vp_outcome(bars, S, now_ms):
+    """Оролтын дараах лаагаар (хаагдаагүй одоогийн лааг оруулан) SL / TP / хугацаа дууссан эсэх."""
+    d = S["dir"]
+    n = 0
+    for b in bars:
+        if b["ct"] < S["time"]:
+            continue
+        n += 1
+        if (b["l"] <= S["sl"]) if d == 1 else (b["h"] >= S["sl"]):
+            return "sl", min(b["ct"], now_ms), S["sl"]
+        if (b["h"] >= S["tp"]) if d == 1 else (b["l"] <= S["tp"]):
+            return "tp", min(b["ct"], now_ms), S["tp"]
+        if n >= VP["hold"] and b["ct"] < now_ms:
+            return "time", b["ct"], b["c"]
+    return "open", None, None
+
+
 # ---------------------------------------------------------------- Telegram
 
 def tg(token, method, **params):
     return http_json(f"https://api.telegram.org/bot{token}/{method}", data=params)
 
 
-WELCOME = ("👋 Сайн байна уу! Энэ чатад 📊 EMA дохио ба 🧠 SMC санаа ирнэ.\n"
+WELCOME = ("👋 Сайн байна уу! Энэ чатад 📦 Volume Profile дохио, 🧠 SMC санаа ирнэ.\n"
            "Мэдэгдэл зогсоох бол /stop гэж бичнэ үү.")
 
 
@@ -725,6 +860,45 @@ def smc_transition(pair_key, tf, S, prev):
     return None
 
 
+def vp_message(pair_key, tf, S, price, prev=None):
+    dec = PAIRS[pair_key]["dec"]
+    d = S["dir"]
+    va = S["va"]
+    risk = abs(S["entry"] - S["sl"])
+    lines = []
+    if prev:
+        lines += [prev, ""]
+    lines += [
+        f"📦 Volume Profile · {'🟢 BUY' if d == 1 else '🔴 SELL'}",
+        f"{PAIRS[pair_key]['name']} · {TF[tf][4]}",
+        f"Өмнөх өдрийн Value Area: {fmt_p(va['val'], dec)} – {fmt_p(va['vah'], dec)} (POC {fmt_p(va['poc'], dec)})",
+        f"Үнэ VA-гаас {'дээш' if d == 1 else 'доош'} гарч {VP['need']} лаа тогтлоо · {fmt_time(S['time'])}",
+        f"200 өдрийн чиг: {'өсөх ↑' if d == 1 else 'буурах ↓'}",
+        "",
+        f"Оролт (Market): {fmt_p(S['entry'], dec)}",
+        f"SL: {fmt_p(S['sl'], dec)}  ({'−' if d == 1 else '+'}{fmt_p(risk, dec)})",
+        f"TP: {fmt_p(S['tp'], dec)}  ({'+' if d == 1 else '−'}{fmt_p(risk * VP['tp_r'], dec)})",
+        f"Хугацаа: {VP['hold']} цагт TP/SL-д хүрэхгүй бол {fmt_time(S['time'] + VP['hold'] * 3600000)}-д хаана.",
+        f"Одоогийн үнэ: {fmt_p(price, dec)}",
+        "ℹ️ Үнэ PAXG-аас тул брокерын үнээс бага зэрэг зөрнө. SL/TP-г хаалтанд буй зайгаар тавина уу.",
+    ]
+    if S["age"] >= VP["fresh_bars"]:
+        lines.append(f"⚠️ Дохио {S['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
+    lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
+    return "\n".join(lines)
+
+
+def vp_close_text(pair_key, tf, rec, status, t_ms, price):
+    dec = PAIRS[pair_key]["dec"]
+    h = head(pair_key, tf, rec["dir"])
+    if status == "tp":
+        return f"📦 🎯 VP TP хүрсэн · {h}\nTP {fmt_p(price, dec)} ({fmt_time(t_ms)[-5:]}). Ашиг ≈ +{VP['tp_r']:g}R"
+    if status == "sl":
+        return f"📦 🛑 VP SL цохисон · {h}\nSL {fmt_p(price, dec)} ({fmt_time(t_ms)[-5:]}). Алдагдал ≈ −1R"
+    r = (price - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
+    return f"📦 ⌛ VP хугацаа дууслаа · {h}\n{VP['hold']} цаг өнгөрсөн тул {fmt_p(price, dec)}-д хаана уу ({fmt_time(t_ms)[-5:]}). Үр дүн ≈ {r:+.1f}R"
+
+
 # ---------------------------------------------------------------- Үндсэн
 
 def load_json(path, default):
@@ -746,6 +920,7 @@ def main():
     state = load_json(STATE_FILE, {})
     state.setdefault("orders", {})
     state.setdefault("smc", {})
+    state.setdefault("vp", {})
     state.pop("sent", None)
 
     sync_chats(token, state)
@@ -773,6 +948,15 @@ def main():
         send("🧠 SMC санаа нэмэгдлээ.\nОдоогоос 📊 EMA дохио ба 🧠 SMC санаа тус тусдаа ирнэ. "
              "SMC санаа нь бүтцийн эвдрэл (BOS/CHoCH)-ийн дараа Order Block дээр Limit оролт санал болгоно.")
         state["smc_announced"] = True
+
+    if not state.get("vp_announced") and any(w.get("vp") for w in watch):
+        send("📦 Шинэ арга: Volume Profile + 200 өдрийн чиг (алт, 1 цаг)\n"
+             "3 жилийн өгөгдөл дээр 12 аргыг туршихад алтны 1 цагт хамгийн тогтвортой нь энэ гарлаа "
+             "(6 хагас жил бүгдэд ашигтай). Иймд алтны 1 цагийн 📊 EMA, 🧠 SMC дохиог үүгээр солив. 15 минутын SMC хэвээр.\n"
+             "• Өмнөх өдрийн арилжааны 70% явагдсан муж (Value Area)-аас үнэ гарч 2 цаг тогтвол орно\n"
+             "• Зөвхөн 200 өдрийн чигийн дагуу: үнэ 200 өдрийн дунджаас дээр бол зөвхөн BUY, доор бол зөвхөн SELL\n"
+             "• SL 1.5 ATR, TP 2R, 24 цагт хүрэхгүй бол хаана. Өдөрт хамгийн ихдээ 1 дохио.")
+        state["vp_announced"] = True
 
     def track_ema(key, w, bars, res, now_ms, step_ms):
         L = res["last"]
@@ -824,6 +1008,37 @@ def main():
                 print(f"  → SMC {rec.get('status')} → {S['status']}")
             rec["status"] = S["status"]
 
+    def track_vp(key, w, now_ms):
+        step_ms = TF["1h"][0] * 1000
+        pbars = [b for b in fetch_binance(VP["sym"], "1h") if market_open(b["ct"] + 1 - step_ms)]
+        daily = [b for b in fetch_binance(VP["sym"], "1d") if (((b["ct"] + 1) // 86400000 - 1 + 3) % 7) != 5]
+        if len(pbars) < 100 or len(daily) < VP["sma"] + 5:
+            raise DataError(f"VP: өгөгдөл хүрэлцэхгүй ({len(pbars)} цаг, {len(daily)} өдөр)")
+        rec = state["vp"].get(key)
+        price = pbars[-1]["c"]
+        prev = None
+        if rec and rec.get("status") == "open":
+            st, t_ms, px = vp_outcome(pbars, rec, now_ms)
+            if st != "open":
+                prev = vp_close_text(w["pair"], w["tf"], rec, st, t_ms, px)
+                rec["status"] = st
+        S = vp_signal(pbars, daily, now_ms, step_ms)
+        trend = sma_trend_fn(daily)(now_ms)
+        print(f"{key}: VP {'BUY' if S and S['dir'] == 1 else 'SELL' if S else 'дохио алга'}"
+              f"{' ' + fmt_time(S['time']) if S else ''} · 200 өдрийн чиг {'↑' if trend == 1 else '↓' if trend == -1 else '?'}")
+        # Өмнөх позиц нээлттэй бол шинэ дохио авахгүй (туршилттай адил: нэг удаад нэг позиц)
+        if S and (not rec or rec.get("time") != S["time"]) and not (rec and rec.get("status") == "open"):
+            st, t_ms, px = vp_outcome(pbars, S, now_ms)
+            if st == "open":
+                send(vp_message(w["pair"], w["tf"], S, price, prev))
+                print("  → VP дохио илгээлээ")
+                prev = None
+            state["vp"][key] = {"time": S["time"], "dir": S["dir"], "entry": S["entry"], "sl": S["sl"],
+                                "tp": S["tp"], "status": st}
+        if prev:
+            send(prev)
+            print("  → VP позиц хаагдлаа")
+
     errors, now_ms = [], int(time.time() * 1000)
     last_fetch = load_json(FETCH_FILE, {})
     minute = int(now_ms // 60000)
@@ -865,6 +1080,11 @@ def main():
                 track_ema(key, w, bars, analyze(bars, now_ms), now_ms, step_ms)
             else:
                 print(f"{key}: EMA-д лаа хүрэлцэхгүй ({len(bars)})")
+        if w.get("vp"):
+            try:
+                track_vp(key, w, now_ms)
+            except Exception as e:  # noqa: BLE001
+                print("VP АЛДАА", key, e)
         if w.get("smc", True):
             try:
                 htf_tf, htf = w.get("smc_htf"), None
