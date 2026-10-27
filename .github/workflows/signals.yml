@@ -1,9 +1,11 @@
 name: Дохио шалгах
 
+# GitHub хуваарьт ажлыг олон удаа алгасдаг тул нэг ажил ~5.5 цаг тасралтгүй ажиллаж,
+# 15 минут тутам (02, 17, 32, 47 минутад) шалгана. Цаг бүр шинэ ажил дараалалд орж,
+# өмнөх нь дуусмагц шууд үргэлжилнэ.
 on:
   schedule:
-    # 15 минут тутам (02, 17, 32, 47 минутад). 15 минутын лаа хаагдсанаас 2 минутын дараа шалгана.
-    - cron: "2,17,32,47 * * * *"
+    - cron: "5 * * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -16,7 +18,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 345
     steps:
       - uses: actions/checkout@v4
 
@@ -24,16 +26,26 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Дохио шалгаж Telegram руу илгээх
-        run: python signal_bot.py
+      - name: 15 минут тутам дохио шалгаж Telegram руу илгээх
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TWELVEDATA_KEY: ${{ secrets.TWELVEDATA_KEY }}
-
-      - name: Илгээсэн дохиог тэмдэглэх
-        if: always()
         run: |
           git config user.name "signal-bot"
           git config user.email "signal-bot@users.noreply.github.com"
-          git add state.json || true
-          git diff --cached --quiet || (git commit -m "Дохионы төлөв шинэчлэв" && git push)
+          end=$(( $(date +%s) + 330 * 60 ))
+          while :; do
+            git pull -q --rebase origin main || true
+            python signal_bot.py || true
+            git add state.json || true
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Дохионы төлөв шинэчлэв"
+              git pull -q --rebase origin main || true
+              git push -q || true
+            fi
+            now=$(date +%s)
+            next=$(( (now - 120) / 900 * 900 + 900 + 120 ))
+            if [ "$next" -ge "$end" ]; then break; fi
+            echo "Дараагийн шалгалт: $(TZ=Asia/Ulaanbaatar date -d @$next +%H:%M)"
+            sleep $(( next - now ))
+          done
