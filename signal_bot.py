@@ -27,6 +27,8 @@ UB = timezone(timedelta(hours=8))  # Улаанбаатарын цаг
 RULES = {
     "fast": 20, "slow": 50, "trend": 200, "rsi": 14, "atr": 14,
     "sl_mult": 1.5, "tp_r": 2, "max_bars": 3, "chase_atr": 0.5,
+    # Limit захиалга: дохионы хаалтаас ATR × 0.5 буцаж ухрахад орно, 4 лааны дотор биелэхгүй бол цуцална
+    "limit_atr": 0.5, "limit_bars": 4,
 }
 
 # src: "bn" = Binance (түлхүүргүй), "td" = Twelve Data. td_alt = Binance ажиллахгүй үед нөөц.
@@ -219,7 +221,7 @@ def analyze(bars, now_ms):
         if sig:
             risk = a[i] * RULES["sl_mult"]
             tr = {
-                "dir": sig, "idx": i, "time": bars[i]["ct"] + 1, "entry": c[i],
+                "dir": sig, "idx": i, "time": bars[i]["ct"] + 1, "entry": c[i], "atr": a[i],
                 "sl": c[i] - sig * risk, "tp1": c[i] + sig * risk,
                 "tp": c[i] + sig * risk * RULES["tp_r"], "tp3": c[i] + sig * risk * 3,
                 "hit_tp1": False, "result": "open",
@@ -242,6 +244,49 @@ def analyze(bars, now_ms):
              and bars_since <= RULES["max_bars"])
     action = ("buy" if tr["dir"] == 1 else "sell") if fresh else "wait"
     return {"action": action, "price": price, "last": tr}
+
+
+# ---------------------------------------------------------------- Limit захиалга
+
+def limit_order(bars, tr, now_ms, step_ms):
+    """Дохионоос Limit захиалга тооцоолж, одоогийн төлөвийг буцаана.
+
+    status: pending (хүлээгдэж буй), filled (биелсэн), expired (хугацаа дууссан),
+            tp (TP хүрсэн), sl (SL цохисон)
+    """
+    d, risk_atr = tr["dir"], tr["atr"]
+    limit = tr["entry"] - d * risk_atr * RULES["limit_atr"]
+    sl = limit - d * risk_atr * RULES["sl_mult"]
+    tp = limit + d * risk_atr * RULES["sl_mult"] * RULES["tp_r"]
+    expires = tr["time"] + RULES["limit_bars"] * step_ms
+    order = {"limit": limit, "sl": sl, "tp": tp, "expires": expires,
+             "status": "pending", "fill_time": None, "close_time": None}
+
+    i0 = tr["idx"] + 1
+    for i in range(i0, len(bars)):
+        b = bars[i]
+        bar_open = b["ct"] + 1 - step_ms
+        if order["status"] == "pending":
+            if bar_open >= expires:
+                order["status"] = "expired"
+                break
+            touched = b["l"] <= limit if d == 1 else b["h"] >= limit
+            if not touched:
+                continue
+            order["status"] = "filled"
+            order["fill_time"] = max(bar_open, tr["time"])
+        # биелсэн лаанаас эхлэн SL/TP шалгана (нэг лаанд хоёулаа бол SL гэж үзнэ)
+        hit_sl = b["l"] <= sl if d == 1 else b["h"] >= sl
+        hit_tp = b["h"] >= tp if d == 1 else b["l"] <= tp
+        if hit_sl:
+            order["status"], order["close_time"] = "sl", b["ct"] + 1
+            break
+        if hit_tp:
+            order["status"], order["close_time"] = "tp", b["ct"] + 1
+            break
+    if order["status"] == "pending" and now_ms >= expires:
+        order["status"] = "expired"
+    return order
 
 
 # ---------------------------------------------------------------- Telegram
@@ -277,22 +322,50 @@ def fmt_time(ms):
     return datetime.fromtimestamp(ms / 1000, UB).strftime("%m/%d %H:%M")
 
 
-def signal_message(pair_key, tf, res):
-    p, L = PAIRS[pair_key], res["last"]
-    dec = p["dec"]
-    word = "🟢 BUY" if res["action"] == "buy" else "🔴 SELL"
-    link = "https://www.tradingview.com/chart/?" + urllib.parse.urlencode({"symbol": p["tv"], "interval": TF[tf][3]})
-    return "\n".join([
-        f"{word} · {p['name']} · {TF[tf][4]}",
+def chart_link(pair_key, tf):
+    p = PAIRS[pair_key]
+    return "https://www.tradingview.com/chart/?" + urllib.parse.urlencode({"symbol": p["tv"], "interval": TF[tf][3]})
+
+
+def head(pair_key, tf, d):
+    return f"{PAIRS[pair_key]['name']} · {TF[tf][4]} · {'BUY' if d == 1 else 'SELL'}"
+
+
+def order_message(pair_key, tf, L, order, price, cancel_prev=None):
+    dec = PAIRS[pair_key]["dec"]
+    word = "🟢 BUY LIMIT" if L["dir"] == 1 else "🔴 SELL LIMIT"
+    lines = [
+        f"{word} · {PAIRS[pair_key]['name']} · {TF[tf][4]}",
         f"Дохио гарсан: {fmt_time(L['time'])}",
-        f"Оролт: {fmt_p(L['entry'], dec)}",
-        f"SL: {fmt_p(L['sl'], dec)}",
-        f"TP: {fmt_p(L['tp'], dec)}",
-        f"Одоогийн үнэ: {fmt_p(res['price'], dec)}",
-        "",
-        link,
-        "Автомат техник дохио. Санхүүгийн зөвлөгөө биш.",
-    ])
+        f"Limit үнэ: {fmt_p(order['limit'], dec)}",
+        f"SL: {fmt_p(order['sl'], dec)}",
+        f"TP: {fmt_p(order['tp'], dec)}",
+        f"Хүчинтэй: {fmt_time(order['expires'])[-5:]} хүртэл",
+        f"Одоогийн үнэ: {fmt_p(price, dec)}",
+    ]
+    if order["status"] == "filled":
+        lines.append(f"⚠️ Үнэ {fmt_time(order['fill_time'])[-5:]}-д лимитэд аль хэдийн хүрсэн.")
+    if cancel_prev:
+        lines.append(f"↩️ Өмнөх {cancel_prev} limit захиалгаа цуцална уу.")
+    lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
+    return "\n".join(lines)
+
+
+def transition_message(pair_key, tf, L, order, prev):
+    dec, d, st = PAIRS[pair_key]["dec"], L["dir"], order["status"]
+    h = head(pair_key, tf, d)
+    lim = fmt_p(order["limit"], dec)
+    if st == "filled":
+        return (f"✅ Limit биелсэн · {h}\nОролт: {lim} ({fmt_time(order['fill_time'])[-5:]})\n"
+                f"SL: {fmt_p(order['sl'], dec)} · TP: {fmt_p(order['tp'], dec)}")
+    if st == "expired":
+        return f"⌛ Limit биелээгүй · {h}\nХугацаа дууссан. {lim} дээрх захиалгаа цуцална уу."
+    filled_note = f"Limit {lim} биелсэн, " if prev == "pending" else ""
+    if st == "tp":
+        return f"🎯 TP хүрсэн · {h}\n{filled_note}TP {fmt_p(order['tp'], dec)} ({fmt_time(order['close_time'])[-5:]}). Ашиг ≈ +{RULES['tp_r']}R"
+    if st == "sl":
+        return f"🛑 SL цохисон · {h}\n{filled_note}SL {fmt_p(order['sl'], dec)} ({fmt_time(order['close_time'])[-5:]}). Алдагдал ≈ −1R"
+    return None
 
 
 # ---------------------------------------------------------------- Үндсэн
@@ -314,7 +387,8 @@ def main():
 
     config = load_json(CONFIG_FILE, {"watch": [{"pair": "XAUUSD", "tf": "1h"}]})
     state = load_json(STATE_FILE, {})
-    state.setdefault("sent", {})
+    state.setdefault("orders", {})
+    state.pop("sent", None)
 
     chat_id = resolve_chat_id(token, state)
     if not chat_id:
@@ -328,8 +402,11 @@ def main():
         names = ", ".join(f"{PAIRS[w['pair']]['name']} ({TF[w['tf']][4]})" for w in watch)
         tg(token, "sendMessage", chat_id=chat_id,
            text="✅ Дохионы бот ажиллаж эхэллээ.\nХянаж буй: " + names +
-                "\nШинэ BUY эсвэл SELL дохио гармагц энд мэдэгдэнэ.")
+                "\nШинэ дохио гармагц Limit үнэ, SL, TP-тэй нь энд мэдэгдэнэ.")
         state["started"] = True
+
+    def send(text):
+        tg(token, "sendMessage", chat_id=chat_id, text=text, disable_web_page_preview="true")
 
     errors, now_ms = [], int(time.time() * 1000)
     for w in watch:
@@ -344,13 +421,30 @@ def main():
             print("АЛДАА", key, e)
             continue
         L = res["last"]
-        status = res["action"].upper()
-        print(f"{key}: {status} · сүүлийн дохио {fmt_time(L['time']) if L else 'алга'}")
-        if res["action"] in ("buy", "sell") and state["sent"].get(key) != L["time"]:
-            tg(token, "sendMessage", chat_id=chat_id, text=signal_message(w["pair"], w["tf"], res),
-               disable_web_page_preview="true")
-            state["sent"][key] = L["time"]
-            print("  → Telegram руу илгээлээ")
+        if not L:
+            print(f"{key}: дохио алга")
+            continue
+        order = limit_order(bars, L, now_ms, TF[w["tf"]][0] * 1000)
+        rec = state["orders"].get(key)
+        print(f"{key}: сүүлийн дохио {fmt_time(L['time'])} · limit {order['status']}")
+
+        if not rec or rec.get("time") != L["time"]:
+            # шинэ дохио
+            if order["status"] in ("pending", "filled"):
+                cancel_prev = None
+                if rec and rec.get("status") == "pending":
+                    cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
+                send(order_message(w["pair"], w["tf"], L, order, res["price"], cancel_prev))
+                print("  → шинэ limit захиалга илгээлээ")
+            state["orders"][key] = {"time": L["time"], "dir": L["dir"], "status": order["status"]}
+            continue
+
+        if order["status"] != rec.get("status"):
+            msg = transition_message(w["pair"], w["tf"], L, order, rec.get("status"))
+            if msg:
+                send(msg)
+                print(f"  → {rec.get('status')} → {order['status']} мэдэгдлээ")
+            rec["status"] = order["status"]
 
     today = datetime.now(UB).strftime("%Y-%m-%d")
     if errors and state.get("error_day") != today:
