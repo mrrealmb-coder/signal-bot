@@ -331,20 +331,34 @@ def head(pair_key, tf, d):
     return f"{PAIRS[pair_key]['name']} · {TF[tf][4]} · {'BUY' if d == 1 else 'SELL'}"
 
 
-def order_message(pair_key, tf, L, order, price, cancel_prev=None):
+def order_message(pair_key, tf, L, order, price, market_ok, cancel_prev=None):
     dec = PAIRS[pair_key]["dec"]
-    word = "🟢 BUY LIMIT" if L["dir"] == 1 else "🔴 SELL LIMIT"
+    word = "🟢 BUY" if L["dir"] == 1 else "🔴 SELL"
     lines = [
         f"{word} · {PAIRS[pair_key]['name']} · {TF[tf][4]}",
         f"Дохио гарсан: {fmt_time(L['time'])}",
+        f"Одоогийн үнэ: {fmt_p(price, dec)}",
+        "",
+        "▶️ Шууд орох (Market)",
+    ]
+    if market_ok:
+        lines += [
+            f"Оролт: {fmt_p(L['entry'], dec)}",
+            f"SL: {fmt_p(L['sl'], dec)}",
+            f"TP: {fmt_p(L['tp'], dec)}",
+        ]
+    else:
+        lines.append("Үнэ дохионоос хол явсан тул шууд орохгүй. Limit-ээр л ор.")
+    lines += [
+        "",
+        "⏳ Limit захиалга",
         f"Limit үнэ: {fmt_p(order['limit'], dec)}",
         f"SL: {fmt_p(order['sl'], dec)}",
         f"TP: {fmt_p(order['tp'], dec)}",
         f"Хүчинтэй: {fmt_time(order['expires'])[-5:]} хүртэл",
-        f"Одоогийн үнэ: {fmt_p(price, dec)}",
     ]
     if order["status"] == "filled":
-        lines.append(f"⚠️ Үнэ {fmt_time(order['fill_time'])[-5:]}-д лимитэд аль хэдийн хүрсэн.")
+        lines.append(f"⚠️ Үнэ {fmt_time(order['fill_time'])[-5:]}-д limit-д аль хэдийн хүрсэн.")
     if cancel_prev:
         lines.append(f"↩️ Өмнөх {cancel_prev} limit захиалгаа цуцална уу.")
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
@@ -434,7 +448,8 @@ def main():
                 cancel_prev = None
                 if rec and rec.get("status") == "pending":
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
-                send(order_message(w["pair"], w["tf"], L, order, res["price"], cancel_prev))
+                market_ok = res["action"] in ("buy", "sell") and order["status"] == "pending"
+                send(order_message(w["pair"], w["tf"], L, order, res["price"], market_ok, cancel_prev))
                 print("  → шинэ limit захиалга илгээлээ")
             state["orders"][key] = {"time": L["time"], "dir": L["dir"], "status": order["status"]}
             continue
