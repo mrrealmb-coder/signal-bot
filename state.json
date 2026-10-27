@@ -13,7 +13,7 @@
     },
     "XAUUSD|15m": {
       "dir": -1,
-      "status": "pending",
+      "status": "filled",
       "time": 1793078100000
     }
   },
