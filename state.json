@@ -70,5 +70,15 @@
   "smc_announced": true,
   "started": true,
   "update_offset": 291487573,
-  "vp": {}
+  "vp": {
+    "XAUUSD|1h": {
+      "dir": -1,
+      "entry": 4010.76,
+      "sl": 4027.275373040428,
+      "status": "sl",
+      "time": 1793088000000,
+      "tp": 3977.729253919145
+    }
+  },
+  "vp_announced": true
 }
