@@ -30,7 +30,7 @@
     "XAUUSD|1h": {
       "dir": -1,
       "status": "tp",
-      "time": 1792425600000
+      "time": 1792429200000
     }
   },
   "owner": "5371043257",
@@ -57,9 +57,9 @@
       "time": 1792713600000
     },
     "XAUUSD|15m": {
-      "dir": 1,
+      "dir": -1,
       "status": "sl",
-      "time": 1793007900000
+      "time": 1793059200000
     },
     "XAUUSD|1h": {
       "dir": -1,
@@ -69,5 +69,6 @@
   },
   "smc_announced": true,
   "started": true,
-  "update_offset": 291487573
+  "update_offset": 291487573,
+  "vp": {}
 }
