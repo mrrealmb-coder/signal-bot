@@ -2,6 +2,7 @@
 
 Аргууд (config.json-д хослол бүрт асаана):
   st  = Supertrend (10, 3) + 200 өдрийн чиг (NASDAQ 100, 5 минут): чиг эргэхэд орно, эсрэг эргэхэд гарна
+  dtc = 🧪 DTC 6 EMA тууз + ATR + 200 өдрийн чиг (туршилт)
   vp  = Volume Profile + 200 өдрийн чиг (зөвхөн алт, 1 цаг): өмнөх өдрийн Value Area-гаас гарч тогтоход орно
   smc = SMC: BOS-ийн дараа Order Block дээр limit
   ema = доорх EMA дүрэм
@@ -66,6 +67,13 @@ VP = {"sym": "PAXGUSDT", "step": 1.0, "va": 0.70, "need": 2, "sl_atr": 1.5, "tp_
 #   Чиг эргэх лаа хаагдахад, зөвхөн 200 өдрийн SMA-ийн чиглэлд орно. SL = тэр үеийн Supertrend шугам.
 #   Supertrend эсрэг эргэхэд (аль ч чиглэлд) гарна. 240 лаанаас удаан бол хаана.
 ST = {"atr": 10, "factor": 3.0, "hold": 240, "fresh_bars": 2}
+
+# 🧪 DTC (DTC Trading Club индикаторын нийтэлсэн тайлбараар хуулбарласан) — туршилтын дохио.
+#   EMA 30/35/40/45/50/60 бүгд дарааллаар жагсахад (саармаг/эсрэгээс) орно.
+#   ATR(14) нь өмнөх 50 лааны дунджаас бага бол алгасна. Зөвхөн 200 өдрийн чигийн дагуу.
+#   SL = сүүлийн 10 лааны хамгийн нам/өндөр цэг, TP = 2R. Алтны 15 минутад 3 жилд +27R (159 арилжаа).
+DTC = {"emas": (30, 35, 40, 45, 50, 60), "atr_avg": 50, "atr_mult": 1.0, "sl_bars": 10, "tp_r": 2.0,
+       "min_risk_atr": 0.2, "hold": 500, "fresh_bars": 2}
 
 # src: "bn" = Binance (түлхүүргүй), "td" = Twelve Data. td_alt = Binance ажиллахгүй үед нөөц.
 PAIRS = {
@@ -648,6 +656,60 @@ def st_outcome(bars, st, P, now_ms):
     return {}
 
 
+# ---------------------------------------------------------------- 🧪 DTC
+
+def dtc_signal(bars, daily, now_ms):
+    """Хаагдсан лаан дээрх хамгийн сүүлийн DTC дохио (бүх шүүлтүүрийг давсан) ба түүний төлөв."""
+    closed = [b for b in bars if b["ct"] < now_ms]
+    c = [b["c"] for b in closed]
+    E = [ema(c, p) for p in DTC["emas"]]
+    a = atr(closed, RULES["atr"])
+    trend = sma_trend_fn(daily)
+    n = DTC["atr_avg"]
+
+    def align(i):
+        v = [e[i] for e in E]
+        if any(math.isnan(x) for x in v):
+            return 0
+        if all(v[k] > v[k + 1] for k in range(len(v) - 1)):
+            return 1
+        if all(v[k] < v[k + 1] for k in range(len(v) - 1)):
+            return -1
+        return 0
+    for i in range(len(closed) - 1, n, -1):
+        d = align(i)
+        if not d or align(i - 1) == d or math.isnan(a[i]):
+            continue
+        if a[i] < DTC["atr_mult"] * sum(a[i - n:i]) / n or trend(closed[i]["ct"] + 1) != d:
+            continue
+        w = closed[i - DTC["sl_bars"] + 1:i + 1]
+        e = c[i]
+        sl = min(b["l"] for b in w) if d == 1 else max(b["h"] for b in w)
+        r = abs(e - sl)
+        if r < DTC["min_risk_atr"] * a[i]:
+            continue
+        S = {"dir": d, "time": closed[i]["ct"] + 1, "entry": e, "sl": sl, "tp": e + d * DTC["tp_r"] * r,
+             "age": len(closed) - 1 - i, "status": "open"}
+        S.update(dtc_outcome(bars, S, now_ms))
+        return S
+    return None
+
+
+def dtc_outcome(bars, S, now_ms):
+    d, n = S["dir"], 0
+    for b in bars:
+        if b["ct"] < S["time"]:
+            continue
+        n += 1
+        if (b["l"] <= S["sl"]) if d == 1 else (b["h"] >= S["sl"]):
+            return {"status": "sl", "close_time": min(b["ct"], now_ms), "exit": S["sl"]}
+        if (b["h"] >= S["tp"]) if d == 1 else (b["l"] <= S["tp"]):
+            return {"status": "tp", "close_time": min(b["ct"], now_ms), "exit": S["tp"]}
+        if n >= DTC["hold"] and b["ct"] < now_ms:
+            return {"status": "time", "close_time": b["ct"] + 1, "exit": b["c"]}
+    return {}
+
+
 # ---------------------------------------------------------------- Telegram
 
 def tg(token, method, **params):
@@ -1010,6 +1072,40 @@ def st_close_text(pair_key, tf, rec, out):
             f"{pct_text(rec['entry'], out['exit'])} · Үр дүн ≈ {r:+.1f}R")
 
 
+def dtc_message(pair_key, tf, S, price):
+    dec = PAIRS[pair_key]["dec"]
+    d = S["dir"]
+    r = abs(S["entry"] - S["sl"])
+    lines = [
+        f"🧪 DTC туршилт · {'🟢 BUY' if d == 1 else '🔴 SELL'}",
+        f"{PAIRS[pair_key]['name']} · {TF[tf][4]}",
+        f"6 EMA тууз {'өсөх' if d == 1 else 'буурах'} дарааллаар жагслаа · {fmt_time(S['time'])}",
+        f"200 өдрийн чиг: {'өсөх ↑' if d == 1 else 'буурах ↓'}",
+        "",
+        f"Оролт (Market): {fmt_p(S['entry'], dec)}",
+        f"SL: {fmt_p(S['sl'], dec)}  ({'−' if d == 1 else '+'}{fmt_p(r, dec)})",
+        f"TP: {fmt_p(S['tp'], dec)}  ({'+' if d == 1 else '−'}{fmt_p(r * DTC['tp_r'], dec)})",
+        f"Одоогийн үнэ: {fmt_p(price, dec)}",
+        "🧪 Туршилтын дохио: бодит үр дүнг 1 сар ажиглана. Мөнгө тавихгүйгээр дагаж үзээрэй.",
+    ]
+    if S["age"] >= DTC["fresh_bars"]:
+        lines.append(f"⚠️ Дохио {S['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
+    lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
+    return "\n".join(lines)
+
+
+def dtc_close_text(pair_key, tf, rec, out):
+    dec = PAIRS[pair_key]["dec"]
+    h = head(pair_key, tf, rec["dir"])
+    t = fmt_time(out["close_time"])[-5:]
+    if out["status"] == "tp":
+        return f"🧪 🎯 DTC TP хүрсэн · {h}\nTP {fmt_p(out['exit'], dec)} ({t}). Ашиг ≈ +{DTC['tp_r']:g}R"
+    if out["status"] == "sl":
+        return f"🧪 🛑 DTC SL цохисон · {h}\nSL {fmt_p(out['exit'], dec)} ({t}). Алдагдал ≈ −1R"
+    r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
+    return f"🧪 ⌛ DTC хугацаа дууслаа · {h}\n{fmt_p(out['exit'], dec)}-д хаана уу ({t}). Үр дүн ≈ {r:+.1f}R"
+
+
 # ---------------------------------------------------------------- Үндсэн
 
 def load_json(path, default):
@@ -1033,6 +1129,7 @@ def main():
     state.setdefault("smc", {})
     state.setdefault("vp", {})
     state.setdefault("st", {})
+    state.setdefault("dtc", {})
     state.pop("sent", None)
 
     sync_chats(token, state)
@@ -1060,6 +1157,14 @@ def main():
         send("🧠 SMC санаа нэмэгдлээ.\nОдоогоос 📊 EMA дохио ба 🧠 SMC санаа тус тусдаа ирнэ. "
              "SMC санаа нь бүтцийн эвдрэл (BOS/CHoCH)-ийн дараа Order Block дээр Limit оролт санал болгоно.")
         state["smc_announced"] = True
+
+    if not state.get("dtc_announced") and any(w.get("dtc") for w in watch):
+        send("🧪 Туршилтын дохио нэмэгдлээ: DTC (алт, 15 минут)\n"
+             "DTC Trading Club индикаторын 6 EMA туузны дүрмийг хуулбарласан. 3 жилийн туршилтаар ATR ба 200 өдрийн "
+             "шүүлтүүртэйгээр бага зэрэг ашигтай гарсан (+27R / 159 арилжаа), гэхдээ одоогийн аргуудаас сул.\n"
+             "• 🧪 тэмдэгтэй дохиог 1 сар мөнгө тавихгүйгээр дагаж, бодит үр дүнг харна\n"
+             "• SL = сүүлийн 10 лааны хэт цэг, TP = 2R")
+        state["dtc_announced"] = True
 
     if not state.get("st_announced") and any(w.get("st") for w in watch):
         send("📈 Шинэ: NASDAQ 100 · 5 минут · Supertrend + 200 өдрийн чиг\n"
@@ -1187,6 +1292,26 @@ def main():
             send(prev)
             print("  → Supertrend позиц хаагдлаа")
 
+    def track_dtc(key, w, bars, now_ms):
+        daily = get_daily()
+        rec = state["dtc"].get(key)
+        price = bars[-1]["c"]
+        if rec and rec.get("status") == "open":
+            out = dtc_outcome(bars, rec, now_ms)
+            if out:
+                send(dtc_close_text(w["pair"], w["tf"], rec, out))
+                rec["status"] = out["status"]
+                print(f"  → DTC позиц хаагдлаа ({out['status']})")
+        S = dtc_signal(bars, daily, now_ms)
+        print(f"{key}: DTC {('BUY' if S['dir'] == 1 else 'SELL') + ' ' + fmt_time(S['time']) + ' · ' + S['status'] if S else 'дохио алга'}")
+        if S and (not rec or rec.get("time") != S["time"]) and not (rec and rec.get("status") == "open"):
+            if not rec and S["age"] >= DTC["fresh_bars"]:
+                print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
+            elif S["status"] == "open":
+                send(dtc_message(w["pair"], w["tf"], S, price))
+                print("  → DTC дохио илгээлээ")
+            state["dtc"][key] = {k: S[k] for k in ("time", "dir", "entry", "sl", "tp", "status")}
+
     errors, now_ms = [], int(time.time() * 1000)
     last_fetch = load_json(FETCH_FILE, {})
     minute = int(now_ms // 60000)
@@ -1245,6 +1370,11 @@ def main():
                 track_ema(key, w, bars, analyze(bars, now_ms), now_ms, step_ms)
             else:
                 print(f"{key}: EMA-д лаа хүрэлцэхгүй ({len(bars)})")
+        if w.get("dtc"):
+            try:
+                track_dtc(key, w, bars, now_ms)
+            except Exception as e:  # noqa: BLE001
+                print("DTC АЛДАА", key, e)
         if w.get("st"):
             try:
                 track_st(key, w, bars, now_ms)
