@@ -48,7 +48,7 @@
     },
     "USDJPY|15m": {
       "dir": 1,
-      "status": "filled",
+      "status": "tp",
       "time": 1793081700000
     },
     "USDJPY|1h": {
