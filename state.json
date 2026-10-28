@@ -116,6 +116,14 @@
       "status": "exit",
       "time": 1793034900000
     },
+    "XAGUSD|1h": {
+      "dir": -1,
+      "entry": 56.8650016784668,
+      "sent": null,
+      "sl": 58.13250415998637,
+      "status": "exit",
+      "time": 1792638000000
+    },
     "XAUUSD|1h": {
       "dir": -1,
       "entry": 4032.66,
@@ -142,6 +150,14 @@
       "sl": 722.7009612046054,
       "status": "open",
       "time": 1793130900000
+    },
+    "XAGUSD|1h": {
+      "dir": 1,
+      "entry": 54.5,
+      "sent": null,
+      "sl": 52.883166881873706,
+      "status": "open",
+      "time": 1793113200000
     },
     "XAUUSD|1h": {
       "dir": 1,
