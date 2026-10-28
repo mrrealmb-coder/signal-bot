@@ -27,6 +27,15 @@
     }
   },
   "error_day": "2026-10-28",
+  "ledger": [
+    {
+      "k": "NAS100|5m",
+      "m": "st",
+      "r": -1.0,
+      "t": 1793195530901
+    }
+  ],
+  "ledger_start": 1793195530901,
   "mk2_announced": true,
   "names": {
     "-1004482695939": "Mu, Odkoo and Mubbot",
@@ -114,7 +123,7 @@
       "entry": 724.43,
       "sent": true,
       "sl": 721.4809725881439,
-      "status": "open",
+      "status": "sl",
       "time": 1793194500000
     },
     "XAGUSD|1h": {
@@ -146,11 +155,11 @@
     },
     "NAS100|5m": {
       "dir": -1,
-      "entry": 721.15002,
-      "sent": null,
-      "sl": 722.7009612046054,
-      "status": "sl",
-      "time": 1793130900000
+      "entry": 720.77,
+      "sent": true,
+      "sl": 724.820690983243,
+      "status": "open",
+      "time": 1793195400000
     },
     "XAGUSD|1h": {
       "dir": 1,
