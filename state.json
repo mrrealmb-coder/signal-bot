@@ -27,6 +27,7 @@
     }
   },
   "error_day": "2026-10-28",
+  "mk2_announced": true,
   "names": {
     "-1004482695939": "Mu, Odkoo and Mubbot",
     "-5363490041": "Mu, Odkoo and Mubbot"
@@ -114,6 +115,14 @@
       "sl": 711.3252751848866,
       "status": "exit",
       "time": 1793034900000
+    },
+    "XAUUSD|1h": {
+      "dir": -1,
+      "entry": 4032.66,
+      "sent": null,
+      "sl": 4063.7622925676596,
+      "status": "open",
+      "time": 1793163600000
     }
   },
   "st_announced": true,
@@ -133,6 +142,14 @@
       "sl": 722.7009612046054,
       "status": "open",
       "time": 1793130900000
+    },
+    "XAUUSD|1h": {
+      "dir": 1,
+      "entry": 4052.89,
+      "sent": null,
+      "sl": 3999.036944203972,
+      "status": "exit",
+      "time": 1793113200000
     }
   },
   "started": true,
@@ -148,5 +165,15 @@
     }
   },
   "vp_announced": true,
-  "vp_ct": {}
+  "vp_ct": {
+    "SOLUSD|1h": {
+      "dir": -1,
+      "entry": 100.17,
+      "sent": false,
+      "sl": 101.27531749113989,
+      "status": "sl",
+      "time": 1793073600000,
+      "tp": 97.95936501772022
+    }
+  }
 }
