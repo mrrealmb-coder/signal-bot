@@ -98,7 +98,12 @@ PAIRS = {
     "AUDCAD": {"name": "AUD/CAD", "src": "td", "sym": "AUD/CAD", "tv": "OANDA:AUDCAD", "dec": 5},
     "CADJPY": {"name": "CAD/JPY", "src": "td", "sym": "CAD/JPY", "tv": "OANDA:CADJPY", "dec": 3},
     # NASDAQ 100: QQQ ETF-ийн үнээр тооцно (Twelve Data). Брокерын NAS100-ийн нэгж өөр тул SL-ийг хувиар өгнө.
-    "NAS100": {"name": "NASDAQ 100", "src": "td", "sym": "QQQ", "tv": "NASDAQ:QQQ", "dec": 2, "pct": True},
+    "NAS100": {"name": "NASDAQ 100", "src": "td", "sym": "QQQ", "tv": "NASDAQ:QQQ", "dec": 2, "pct": True,
+               "us_hours": True},
+    # Мөнгө: Twelve Data-ийн лимит хэмнэхийн тулд 15 минут тутам татна (1 цагийн Supertrend-д хангалттай)
+    "XAGUSD": {"name": "Мөнгө XAG/USD", "src": "td", "sym": "XAG/USD", "tv": "OANDA:XAGUSD", "dec": 3, "td_every": 15},
+    # Solana: Binance (24/7). Volume Profile-ийн үнийн алхам = үнийн 0.04%
+    "SOLUSD": {"name": "Solana SOL/USD", "src": "bn", "sym": "SOLUSDT", "tv": "BINANCE:SOLUSDT", "dec": 2},
     "ETHUSD": {"name": "ETH/USD", "src": "bn", "sym": "ETHUSDT", "td_alt": "ETH/USD", "tv": "BINANCE:ETHUSDT", "dec": 2},
 }
 
@@ -511,9 +516,9 @@ def day_key(b, step_ms):
     return (b["ct"] + 1 - step_ms + 2 * 3600000) // 86400000
 
 
-def value_area(bars):
+def value_area(bars, step=None):
     """Эзэлхүүний профайл → POC, Value Area (VP['va'] хувь)."""
-    step, vol = VP["step"], {}
+    step, vol = (step or VP["step"]), {}
     for b in bars:
         lo, hi = math.floor(b["l"] / step), math.floor(b["h"] / step)
         for k in range(lo, hi + 1):
@@ -555,7 +560,7 @@ def sma_trend_fn(daily):
     return f
 
 
-def vp_signal(bars, daily, now_ms, step_ms, side=1):
+def vp_signal(bars, daily, now_ms, step_ms, side=1, step=None):
     """Сүүлийн 2 арилжааны өдрийн VP дохионоос хамгийн сүүлийнхийг буцаана (өдөрт зөвхөн эхний эвдрэл).
     side=1: 200 өдрийн чигийн дагуух, side=-1: чигийн эсрэг дохио."""
     closed = [b for b in bars if b["ct"] < now_ms]
@@ -567,7 +572,7 @@ def vp_signal(bars, daily, now_ms, step_ms, side=1):
     ks = sorted(days)
     found = None
     for p, q in zip(ks[-3:-1], ks[-2:]):
-        va = value_area([closed[i] for i in days[p]])
+        va = value_area([closed[i] for i in days[p]], step)
         if not va:
             continue
         was_in, cnt, cd = False, 0, 0
@@ -1011,6 +1016,7 @@ def smc_transition(pair_key, tf, S, prev):
 
 
 def vp_message(pair_key, tf, S, price, prev=None, ct=False):
+    paxg = pair_key == "XAUUSD"
     dec = PAIRS[pair_key]["dec"]
     d = S["dir"]
     va = S["va"]
@@ -1032,8 +1038,9 @@ def vp_message(pair_key, tf, S, price, prev=None, ct=False):
         f"TP: {fmt_p(S['tp'], dec)}  ({'+' if d == 1 else '−'}{fmt_p(risk * VP['tp_r'], dec)})",
         f"Хугацаа: {VP['hold']} цагт TP/SL-д хүрэхгүй бол {fmt_time(S['time'] + VP['hold'] * 3600000)}-д хаана.",
         f"Одоогийн үнэ: {fmt_p(price, dec)}",
-        "ℹ️ Үнэ PAXG-аас тул брокерын үнээс бага зэрэг зөрнө. SL/TP-г хаалтанд буй зайгаар тавина уу.",
     ]
+    if paxg:
+        lines.append("ℹ️ Үнэ PAXG-аас тул брокерын үнээс бага зэрэг зөрнө. SL/TP-г хаалтанд буй зайгаар тавина уу.")
     if S["age"] >= VP["fresh_bars"]:
         lines.append(f"⚠️ Дохио {S['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
     if ct:
@@ -1057,7 +1064,7 @@ def pct_text(entry, price):
     return f"{(price - entry) / entry * 100:+.2f}%"
 
 
-def st_message(pair_key, tf, P, price, prev=None, ct=False):
+def st_message(pair_key, tf, P, price, prev=None, ct=False, test=False):
     p = PAIRS[pair_key]
     dec, d = p["dec"], P["dir"]
     lines = []
@@ -1080,6 +1087,8 @@ def st_message(pair_key, tf, P, price, prev=None, ct=False):
         lines.append(f"ℹ️ Брокерын {pair_key} дээр SL-ийг оролтоос {pct_text(P['entry'], P['sl'])} зайд тавина уу.")
     if P["age"] >= ST["fresh_bars"]:
         lines.append(f"⚠️ Дохио {P['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
+    if test:
+        lines.append("🧪 Туршилтын дохио: бодит үр дүнг 1 сар ажиглана. Мөнгө тавихгүйгээр дагаж үзээрэй.")
     if ct:
         lines.append(CT_NOTE)
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
@@ -1275,6 +1284,15 @@ def main():
              "• SL 1.5 ATR, TP 2R, 24 цагт хүрэхгүй бол хаана. Өдөрт хамгийн ихдээ 1 дохио.")
         state["vp_announced"] = True
 
+    if not state.get("mk2_announced") and any(w.get("pair") in ("SOLUSD", "XAGUSD") for w in watch):
+        send("🆕 Шинэ дохио нэмэгдлээ (13 захыг туршсаны дараа)\n"
+             "• 📈 Алт · 1 цаг · Supertrend + 200 өдрийн чиг — 3 жилд +52R / 156 арилжаа, 6 хагас жилийн 5-д ашигтай, "
+             "параметрийг өөрчлөхөд ч тогтвортой. NASDAQ-тай ижил дүрэм (эргэлтээр орно, SL = шугам, эсрэг эргэхэд гарна)\n"
+             "• 📦 Solana SOL/USD · 1 цаг · Volume Profile + 200 өдрийн чиг — 3 жилд +43R / 287 арилжаа, 5/6 хэсэгт ашигтай\n"
+             "• 🧪 Мөнгө XAG/USD · 1 цаг · Supertrend — 2 жилд +31R, гэхдээ ашгийн ихэнх нь 2025 оны өсөлтөөс тул туршилтаар\n"
+             "S&P 500, Dow, DAX, газрын тос, Bitcoin зэрэг нь туршилтад тэнцээгүй.")
+        state["mk2_announced"] = True
+
     if not state.get("ct_announced") and config.get("counter_trend"):
         send("⚠️ Шинэ: чигийн ЭСРЭГ дохио (туршилт)\n"
              "Одоогоос VP, SMC, DTC, Supertrend аргууд 200 өдрийн чигийн эсрэг BUY/SELL дохиог ч илгээнэ. "
@@ -1352,10 +1370,14 @@ def main():
         bucket = "vp_ct" if ct else "vp"
         label = "VP эсрэг" if ct else "VP"
         step_ms = TF["1h"][0] * 1000
-        if "vp_1h" not in cache:
-            cache["vp_1h"] = [b for b in fetch_binance(VP["sym"], "1h") if market_open(b["ct"] + 1 - step_ms)]
-        pbars = cache["vp_1h"]
-        daily = get_daily()
+        gold = w["pair"] == "XAUUSD"
+        sym = VP["sym"] if gold else PAIRS[w["pair"]]["sym"]   # алтны эзэлхүүнийг PAXG-аас
+        if ("vp_1h", sym) not in cache:
+            raw = fetch_binance(sym, "1h")
+            cache[("vp_1h", sym)] = [b for b in raw if market_open(b["ct"] + 1 - step_ms)] if gold else raw
+        pbars = cache[("vp_1h", sym)]
+        daily = get_daily() if gold else get_daily_bn(sym)
+        vstep = None if gold else pbars[-1]["c"] * 0.0004
         if len(pbars) < 100 or len(daily) < VP["sma"] + 5:
             raise DataError(f"VP: өгөгдөл хүрэлцэхгүй ({len(pbars)} цаг, {len(daily)} өдөр)")
         rec = state.setdefault(bucket, {}).get(key)
@@ -1368,7 +1390,7 @@ def main():
                 if rec.get("sent"):
                     record(state, bucket, key, (px - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
                 rec["status"] = st
-        S = vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1)
+        S = vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1, step=vstep)
         trend = sma_trend_fn(daily)(now_ms)
         print(f"{key}: {label} {'BUY' if S and S['dir'] == 1 else 'SELL' if S else 'дохио алга'}"
               f"{' ' + fmt_time(S['time']) if S else ''} · 200 өдрийн чиг {'↑' if trend == 1 else '↓' if trend == -1 else '?'}")
@@ -1376,7 +1398,7 @@ def main():
         if S and (not rec or rec.get("time") != S["time"]) and not (rec and rec.get("status") == "open"):
             st, t_ms, px = vp_outcome(pbars, S, now_ms)
             sent = False
-            if ct and not rec and (S["age"] >= VP["fresh_bars"] or now_ms - S["time"] > VP["fresh_bars"] * step_ms):
+            if not rec and (S["age"] >= VP["fresh_bars"] or now_ms - S["time"] > VP["fresh_bars"] * step_ms):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif st == "open":
                 send(vp_message(w["pair"], w["tf"], S, price, prev, ct))
@@ -1391,7 +1413,8 @@ def main():
     def track_st(key, w, bars, now_ms, ct=False):
         bucket = "st_ct" if ct else "st"
         label = "Supertrend эсрэг" if ct else "Supertrend"
-        daily = get_daily_td(w["pair"])
+        daily = get_daily() if w["pair"] == "XAUUSD" else (
+            get_daily_bn(PAIRS[w["pair"]]["sym"]) if PAIRS[w["pair"]]["src"] == "bn" else get_daily_td(w["pair"]))
         if len(daily) < VP["sma"] + 5:
             raise DataError(f"{key}: өдрийн өгөгдөл хүрэлцэхгүй ({len(daily)})")
         rec = state.setdefault(bucket, {}).get(key)
@@ -1410,7 +1433,7 @@ def main():
             if not rec and (P["age"] >= ST["fresh_bars"] or now_ms - P["time"] > ST["fresh_bars"] * TF[w["tf"]][0] * 1000):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif P["status"] == "open":
-                send(st_message(w["pair"], w["tf"], P, price, prev, ct))
+                send(st_message(w["pair"], w["tf"], P, price, prev, ct, bool(w.get("test"))))
                 print(f"  → {label} дохио илгээлээ")
                 prev = None
                 P["sent"] = True
@@ -1466,6 +1489,12 @@ def main():
                               if (((b["ct"] + 1) // 86400000 - 1 + 3) % 7) != 5]
         return cache["daily"]
 
+    def get_daily_bn(sym):
+        """200 өдрийн чигт: Binance-ийн өдрийн лаа (крипто 24/7 тул бүх өдрийг авна)."""
+        if ("daily", sym) not in cache:
+            cache[("daily", sym)] = fetch_binance(sym, "1d")
+        return cache[("daily", sym)]
+
     def get_bars(pair, tf):
         if (pair, tf) not in cache:
             if PAIRS[pair]["src"] == "td" and tf in ("1h", "4h"):
@@ -1482,8 +1511,14 @@ def main():
         if PAIRS[pair]["src"] == "td":
             if pair not in td_due:
                 prev = last_fetch.get(pair, 0)
-                on_grid = (minute - 2) % TD_EVERY_MIN == 0
-                td_due[pair] = not (minute - prev < TD_EVERY_MIN and not (on_grid and minute != prev))
+                every = PAIRS[pair].get("td_every", TD_EVERY_MIN)
+                on_grid = (minute - 2) % every == 0
+                td_due[pair] = not (minute - prev < every and not (on_grid and minute != prev))
+                if PAIRS[pair].get("us_hours"):
+                    # АНУ-ын бирж: Даваа–Баасан 13:00–21:15 UTC-ээс гадуур QQQ-ийн үнэ хөдөлдөггүй тул лимит хэмнэнэ
+                    wd, mod = (minute // 1440 + 3) % 7, minute % 1440
+                    if wd >= 5 or not (13 * 60 <= mod <= 21 * 60 + 15):
+                        td_due[pair] = False
                 if td_due[pair]:
                     last_fetch[pair] = minute
             if not td_due[pair]:
