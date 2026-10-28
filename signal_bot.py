@@ -100,8 +100,10 @@ PAIRS = {
     # NASDAQ 100: QQQ ETF-ийн үнээр тооцно (Twelve Data). Брокерын NAS100-ийн нэгж өөр тул SL-ийг хувиар өгнө.
     "NAS100": {"name": "NASDAQ 100", "src": "td", "sym": "QQQ", "tv": "NASDAQ:QQQ", "dec": 2, "pct": True,
                "us_hours": True},
-    # Мөнгө: Twelve Data-ийн лимит хэмнэхийн тулд 15 минут тутам татна (1 цагийн Supertrend-д хангалттай)
-    "XAGUSD": {"name": "Мөнгө XAG/USD", "src": "td", "sym": "XAG/USD", "tv": "OANDA:XAGUSD", "dec": 3, "td_every": 15},
+    # Мөнгө: Twelve Data-ийн үнэгүй багцад түүхий эд байхгүй тул Yahoo-ийн мөнгөний фьючерс (SI=F)-ээс 15 минут тутам татна.
+    # quiet: туршилтын хослол тул үнэ татаж чадахгүй бол Telegram-аар анхааруулахгүй (логт л бичнэ)
+    "XAGUSD": {"name": "Мөнгө XAG/USD", "src": "yf", "sym": "SI=F", "tv": "OANDA:XAGUSD", "dec": 3, "td_every": 15,
+               "quiet": True},
     # Solana: Binance (24/7). Volume Profile-ийн үнийн алхам = үнийн 0.04%
     "SOLUSD": {"name": "Solana SOL/USD", "src": "bn", "sym": "SOLUSDT", "tv": "BINANCE:SOLUSDT", "dec": 2},
     "ETHUSD": {"name": "ETH/USD", "src": "bn", "sym": "ETHUSDT", "td_alt": "ETH/USD", "tv": "BINANCE:ETHUSDT", "dec": 2},
@@ -180,6 +182,31 @@ def fetch_twelve(sym, tf, key):
     raise DataError(f"Twelve Data {sym}: лимит")
 
 
+def fetch_yahoo(sym, tf):
+    """Yahoo Finance-ийн цагийн/өдрийн лаа (ct = лаа хаагдах мөч)."""
+    rng = {"1h": "60d", "1d": "2y"}.get(tf)
+    if not rng:
+        raise DataError(f"Yahoo {sym}: {tf} дэмжигдэхгүй")
+    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}"
+           f"?interval={tf}&range={rng}")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (signal-bot)"})
+        with urllib.request.urlopen(req, timeout=20) as res:
+            j = json.loads(res.read().decode())
+        r = j["chart"]["result"][0]
+        q, ts = r["indicators"]["quote"][0], r["timestamp"]
+    except Exception as e:  # noqa: BLE001
+        raise DataError(f"Yahoo {sym}: {e}")
+    step = TF[tf][0] * 1000
+    out = []
+    for i, t in enumerate(ts):
+        h, l, c = q["high"][i], q["low"][i], q["close"][i]
+        if h is None or l is None or c is None or not h > l:
+            continue
+        out.append({"h": h, "l": l, "c": c, "ct": t * 1000 + step - 1, "v": float(q["volume"][i] or 0)})
+    return out
+
+
 def market_open(open_ms):
     """Алт, валютын зах зээл: Баасан 21:00 UTC-ээс Ням 22:00 UTC хүртэл хаалттай."""
     wd = (open_ms // 86400000 + 3) % 7  # 0 = Даваа (1970-01-01 нь Пүрэв)
@@ -200,6 +227,8 @@ def fetch_bars(pair_key, tf, td_key):
             step = TF[tf][0] * 1000
             bars = [b for b in bars if market_open(b["ct"] + 1 - step)]
         return bars
+    if p["src"] == "yf":
+        return fetch_yahoo(p["sym"], tf)
     return fetch_twelve(p["sym"], tf, td_key)
 
 
@@ -1413,8 +1442,10 @@ def main():
     def track_st(key, w, bars, now_ms, ct=False):
         bucket = "st_ct" if ct else "st"
         label = "Supertrend эсрэг" if ct else "Supertrend"
+        src = PAIRS[w["pair"]]["src"]
         daily = get_daily() if w["pair"] == "XAUUSD" else (
-            get_daily_bn(PAIRS[w["pair"]]["sym"]) if PAIRS[w["pair"]]["src"] == "bn" else get_daily_td(w["pair"]))
+            get_daily_bn(PAIRS[w["pair"]]["sym"]) if src == "bn" else
+            fetch_yahoo(PAIRS[w["pair"]]["sym"], "1d") if src == "yf" else get_daily_td(w["pair"]))
         if len(daily) < VP["sma"] + 5:
             raise DataError(f"{key}: өдрийн өгөгдөл хүрэлцэхгүй ({len(daily)})")
         rec = state.setdefault(bucket, {}).get(key)
@@ -1508,7 +1539,7 @@ def main():
         pair, tf = w["pair"], w["tf"]
         key = f"{pair}|{tf}"
         # Binance (алт, ETH) минут тутам; Twelve Data-ийн өдрийн лимитийг хэмнэхийн тулд валют 5 минут тутам
-        if PAIRS[pair]["src"] == "td":
+        if PAIRS[pair]["src"] in ("td", "yf"):
             if pair not in td_due:
                 prev = last_fetch.get(pair, 0)
                 every = PAIRS[pair].get("td_every", TD_EVERY_MIN)
@@ -1529,7 +1560,8 @@ def main():
             if len(bars) < 60:
                 raise DataError(f"{key}: өгөгдөл хүрэлцэхгүй ({len(bars)} лаа)")
         except Exception as e:  # noqa: BLE001
-            errors.append(str(e))
+            if not PAIRS[pair].get("quiet"):
+                errors.append(str(e))
             print("АЛДАА", key, e)
             continue
         if w.get("ema", True):
