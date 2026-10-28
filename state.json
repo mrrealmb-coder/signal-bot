@@ -117,6 +117,24 @@
     }
   },
   "st_announced": true,
+  "st_ct": {
+    "NAS100|15m": {
+      "dir": -1,
+      "entry": 713.77502,
+      "sent": null,
+      "sl": 721.2335438571083,
+      "status": "exit",
+      "time": 1792676700000
+    },
+    "NAS100|5m": {
+      "dir": -1,
+      "entry": 721.15002,
+      "sent": null,
+      "sl": 722.7009612046054,
+      "status": "open",
+      "time": 1793130900000
+    }
+  },
   "started": true,
   "update_offset": 291487577,
   "vp": {
