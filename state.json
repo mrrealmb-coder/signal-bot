@@ -1,7 +1,8 @@
 {
   "chat_ids": [
     "5371043257",
-    "-5363490041"
+    "-5363490041",
+    "-1004482695939"
   ],
   "dtc": {
     "XAUUSD|15m": {
@@ -16,6 +17,7 @@
   "dtc_announced": true,
   "error_day": "2026-10-28",
   "names": {
+    "-1004482695939": "Mu, Odkoo and Mubbot",
     "-5363490041": "Mu, Odkoo and Mubbot"
   },
   "orders": {
@@ -98,7 +100,7 @@
   },
   "st_announced": true,
   "started": true,
-  "update_offset": 291487574,
+  "update_offset": 291487577,
   "vp": {
     "XAUUSD|1h": {
       "dir": -1,
