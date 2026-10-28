@@ -731,7 +731,7 @@ def sync_chats(token, state):
 
     Шинэ хүн Start дарах эсвэл ботыг группт нэмэхэд эзэмшигчид "Зөвшөөрөх / Татгалзах" товчтой
     хүсэлт очно. Зөвхөн эзэмшигчийн зөвшөөрсөн чатууд дохио авна. /stop бичсэн чат хасагдана.
-    Эзэмшигчийн командууд: /list, /remove <id>, /approve <id>, /deny <id>
+    Эзэмшигчийн командууд: /list, /remove <id>, /approve <id>, /deny <id>, /report
     """
     chats = state.setdefault("chat_ids", [])
     if state.get("chat_id") and state["chat_id"] not in chats:
@@ -811,6 +811,8 @@ def sync_chats(token, state):
                                  if pending else ""))
                 elif cmd in ("/approve", "/deny", "/remove") and len(parts) > 1:
                     decide(cmd[1:], parts[1])
+                elif cmd == "/report":
+                    owner_msg(report_text(state, int(time.time() * 1000)))
                 continue
             if text.startswith("/stop"):
                 left = True
@@ -1106,6 +1108,50 @@ def dtc_close_text(pair_key, tf, rec, out):
     return f"🧪 ⌛ DTC хугацаа дууслаа · {h}\n{fmt_p(out['exit'], dec)}-д хаана уу ({t}). Үр дүн ≈ {r:+.1f}R"
 
 
+# ---------------------------------------------------------------- Тайлан (арилжаа бүрийн R-ийг тоолно)
+
+METHOD_NAMES = {"ema": "📊 EMA", "smc": "🧠 SMC", "vp": "📦 VP", "st": "📈 Supertrend", "dtc": "🧪 DTC"}
+
+
+def record(state, method, key, r):
+    """Илгээсэн дохионы хаагдсан үр дүнг (R, спредгүй) бүртгэнэ."""
+    led = state.setdefault("ledger", [])
+    led.append({"m": method, "k": key, "r": round(r, 2), "t": int(time.time() * 1000)})
+    del led[:-2000]
+    state.setdefault("ledger_start", led[0]["t"])
+
+
+def report_text(state, now_ms, days=7):
+    led = state.get("ledger", [])
+    since = now_ms - days * 86400000
+
+    def block(rows):
+        groups = {}
+        for x in rows:
+            groups.setdefault((x["m"], x["k"]), []).append(x["r"])
+        lines, total = [], 0.0
+        for (m, k), rs in sorted(groups.items(), key=lambda kv: -sum(kv[1])):
+            pair, tf = k.split("|")
+            name = f"{METHOD_NAMES.get(m, m)} · {PAIRS[pair]['name'] if pair in PAIRS else pair} {TF[tf][4] if tf in TF else tf}"
+            w = sum(1 for r in rs if r > 0)
+            lines.append(f"{name}: {len(rs)} арилжаа · {w} ашигтай / {len(rs) - w} алдагдал · {sum(rs):+.1f}R")
+            total += sum(rs)
+        return lines, total
+    week, wt = block([x for x in led if x["t"] >= since])
+    allr, at = block(led)
+    start = fmt_time(state.get("ledger_start", now_ms))[:5] if led else fmt_time(now_ms)[:5]
+    out = [f"📋 Тайлан · сүүлийн {days} хоног ({fmt_time(since)[:5]} – {fmt_time(now_ms)[:5]})"]
+    out += week if week else ["Энэ хугацаанд хаагдсан арилжаа алга."]
+    if week:
+        out.append(f"Нийт: {wt:+.1f}R")
+    out += ["", f"📈 Эхэлснээс хойш ({start}-аас)"]
+    out += allr if allr else ["Одоогоор хаагдсан арилжаа алга."]
+    if allr:
+        out.append(f"Нийт: {at:+.1f}R")
+    out += ["", "R = нэг арилжааны эрсдэл. Спред, шимтгэлийг тооцоогүй. Limit биелээгүй дохиог тоолоогүй."]
+    return "\n".join(out)
+
+
 # ---------------------------------------------------------------- Үндсэн
 
 def load_json(path, default):
@@ -1200,6 +1246,8 @@ def main():
                 market_ok = res["action"] in ("buy", "sell") and order["status"] == "pending"
                 send(order_message(w["pair"], w["tf"], L, order, res["price"], market_ok, cancel_prev))
                 print("  → EMA дохио илгээлээ")
+                state["orders"][key] = {"time": L["time"], "dir": L["dir"], "status": order["status"], "sent": True}
+                return
             state["orders"][key] = {"time": L["time"], "dir": L["dir"], "status": order["status"]}
             return
         if order["status"] != rec.get("status"):
@@ -1207,6 +1255,8 @@ def main():
             if msg:
                 send(msg)
                 print(f"  → EMA {rec.get('status')} → {order['status']}")
+            if rec.get("sent") and order["status"] in ("tp", "sl"):
+                record(state, "ema", key, RULES["tp_r"] if order["status"] == "tp" else -1.0)
             rec["status"] = order["status"]
 
     def track_smc(key, w, bars, price, now_ms, step_ms, kinds, htf, htf_tf):
@@ -1226,6 +1276,8 @@ def main():
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
                 send(smc_message(w["pair"], w["tf"], S, price, cancel_prev))
                 print("  → SMC санаа илгээлээ")
+                state["smc"][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"], "sent": True}
+                return
             state["smc"][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"]}
             return
         if S["status"] != rec.get("status"):
@@ -1233,6 +1285,8 @@ def main():
             if msg:
                 send(msg)
                 print(f"  → SMC {rec.get('status')} → {S['status']}")
+            if rec.get("sent") and S["status"] in ("tp", "sl"):
+                record(state, "smc", key, SMC["tp_r"] if S["status"] == "tp" else -1.0)
             rec["status"] = S["status"]
 
     def track_vp(key, w, now_ms):
@@ -1248,6 +1302,8 @@ def main():
             st, t_ms, px = vp_outcome(pbars, rec, now_ms)
             if st != "open":
                 prev = vp_close_text(w["pair"], w["tf"], rec, st, t_ms, px)
+                if rec.get("sent"):
+                    record(state, "vp", key, (px - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
                 rec["status"] = st
         S = vp_signal(pbars, daily, now_ms, step_ms)
         trend = sma_trend_fn(daily)(now_ms)
@@ -1261,7 +1317,7 @@ def main():
                 print("  → VP дохио илгээлээ")
                 prev = None
             state["vp"][key] = {"time": S["time"], "dir": S["dir"], "entry": S["entry"], "sl": S["sl"],
-                                "tp": S["tp"], "status": st}
+                                "tp": S["tp"], "status": st, "sent": st == "open"}
         if prev:
             send(prev)
             print("  → VP позиц хаагдлаа")
@@ -1277,6 +1333,8 @@ def main():
             out = st_outcome(bars, supertrend([b for b in bars if b["ct"] < now_ms]), rec, now_ms)
             if out:
                 prev = st_close_text(w["pair"], w["tf"], rec, out)
+                if rec.get("sent"):
+                    record(state, "st", key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
                 rec["status"] = out["status"]
         P = st_signal(bars, daily, now_ms)
         print(f"{key}: Supertrend {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) + ' · ' + P['status'] if P else 'дохио алга'}")
@@ -1287,7 +1345,8 @@ def main():
                 send(st_message(w["pair"], w["tf"], P, price, prev))
                 print("  → Supertrend дохио илгээлээ")
                 prev = None
-            state["st"][key] = {k: P[k] for k in ("time", "dir", "entry", "sl", "status")}
+                P["sent"] = True
+            state["st"][key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "status", "sent")}
         if prev:
             send(prev)
             print("  → Supertrend позиц хаагдлаа")
@@ -1300,6 +1359,8 @@ def main():
             out = dtc_outcome(bars, rec, now_ms)
             if out:
                 send(dtc_close_text(w["pair"], w["tf"], rec, out))
+                if rec.get("sent"):
+                    record(state, "dtc", key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
                 rec["status"] = out["status"]
                 print(f"  → DTC позиц хаагдлаа ({out['status']})")
         S = dtc_signal(bars, daily, now_ms)
@@ -1310,7 +1371,8 @@ def main():
             elif S["status"] == "open":
                 send(dtc_message(w["pair"], w["tf"], S, price))
                 print("  → DTC дохио илгээлээ")
-            state["dtc"][key] = {k: S[k] for k in ("time", "dir", "entry", "sl", "tp", "status")}
+                S["sent"] = True
+            state["dtc"][key] = {k: S.get(k) for k in ("time", "dir", "entry", "sl", "tp", "status", "sent")}
 
     errors, now_ms = [], int(time.time() * 1000)
     last_fetch = load_json(FETCH_FILE, {})
@@ -1398,6 +1460,13 @@ def main():
                 track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, htf, htf_tf)
             except Exception as e:  # noqa: BLE001
                 print("SMC АЛДАА", key, e)
+
+    ub_now = datetime.now(UB)
+    week_tag = ub_now.strftime("%G-W%V")
+    if ub_now.weekday() == 0 and ub_now.hour >= 9 and state.get("report_week") != week_tag:
+        send(report_text(state, now_ms))
+        state["report_week"] = week_tag
+        print("  → 7 хоногийн тайлан илгээлээ")
 
     today = datetime.now(UB).strftime("%Y-%m-%d")
     if errors and state.get("error_day") != today:
