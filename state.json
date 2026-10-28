@@ -1,9 +1,9 @@
 {
   "chat_ids": [
     "5371043257",
-    "-5363490041",
     "-1004482695939"
   ],
+  "ct_announced": true,
   "dtc": {
     "XAUUSD|15m": {
       "dir": -1,
@@ -15,6 +15,17 @@
     }
   },
   "dtc_announced": true,
+  "dtc_ct": {
+    "XAUUSD|15m": {
+      "dir": 1,
+      "entry": 4029.31,
+      "sent": null,
+      "sl": 4009.74,
+      "status": "tp",
+      "time": 1793108700000,
+      "tp": 4068.4500000000003
+    }
+  },
   "error_day": "2026-10-28",
   "names": {
     "-1004482695939": "Mu, Odkoo and Mubbot",
@@ -82,6 +93,13 @@
     }
   },
   "smc_announced": true,
+  "smc_ct": {
+    "XAUUSD|15m": {
+      "dir": 1,
+      "status": "tp",
+      "time": 1793141100000
+    }
+  },
   "st": {
     "NAS100|15m": {
       "dir": 1,
@@ -111,5 +129,6 @@
       "tp": 3977.729253919145
     }
   },
-  "vp_announced": true
+  "vp_announced": true,
+  "vp_ct": {}
 }
