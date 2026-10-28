@@ -75,6 +75,18 @@ ST = {"atr": 10, "factor": 3.0, "hold": 240, "fresh_bars": 2}
 DTC = {"emas": (30, 35, 40, 45, 50, 60), "atr_avg": 50, "atr_mult": 1.0, "sl_bars": 10, "tp_r": 2.0,
        "min_risk_atr": 0.2, "hold": 500, "fresh_bars": 2}
 
+# ⚠️ Чигийн эсрэг дохио (config: "counter_trend": true). Хэрэглэгчийн хүсэлтээр VP, SMC, DTC, Supertrend-ийн
+# 200 өдрийн чигийн ЭСРЭГ дохиог тусад нь тэмдэглэж илгээнэ. 3 жилийн туршилтаар 5 арга бүгдэд алдагдалтай
+# гарсан (ялалт 27–34%) тул үр дүнг тайланд тусад нь тоолж, бодит байдлаар шалгана.
+CT_HEAD = "⚠️ ЧИГИЙН ЭСРЭГ · туршилт"
+CT_NOTE = ("⚠️ 200 өдрийн чигийн эсрэг дохио. 3 жилийн туршилтаар энэ төрлийн дохио алдагдалтай гарсан "
+           "(ялалт ~30%). Мөнгө тавихгүйгээр ажиглана уу.")
+
+
+def trend_line(d, ct=False):
+    t = -d if ct else d
+    return f"200 өдрийн чиг: {'өсөх ↑' if t == 1 else 'буурах ↓'}" + (" · дохио ЭСРЭГ чиглэлд" if ct else "")
+
 # src: "bn" = Binance (түлхүүргүй), "td" = Twelve Data. td_alt = Binance ажиллахгүй үед нөөц.
 PAIRS = {
     # weekend_closed: Binance-ийн XAUT амралтаар ч арилждаг тул брокерын алтны графиктай тааруулж амралтын лааг хасна
@@ -543,8 +555,9 @@ def sma_trend_fn(daily):
     return f
 
 
-def vp_signal(bars, daily, now_ms, step_ms):
-    """Сүүлийн 2 арилжааны өдрийн VP дохионоос хамгийн сүүлийнхийг буцаана (өдөрт зөвхөн эхний эвдрэл)."""
+def vp_signal(bars, daily, now_ms, step_ms, side=1):
+    """Сүүлийн 2 арилжааны өдрийн VP дохионоос хамгийн сүүлийнхийг буцаана (өдөрт зөвхөн эхний эвдрэл).
+    side=1: 200 өдрийн чигийн дагуух, side=-1: чигийн эсрэг дохио."""
     closed = [b for b in bars if b["ct"] < now_ms]
     a = atr(closed, RULES["atr"])
     trend = sma_trend_fn(daily)
@@ -571,11 +584,11 @@ def vp_signal(bars, daily, now_ms, step_ms):
             if cnt == VP["need"]:
                 t = closed[i]["ct"] + 1
                 tr = trend(t)
-                if tr == d:
+                if tr == d * side:
                     risk = VP["sl_atr"] * a[i]
                     found = {"dir": d, "time": t, "entry": c, "sl": c - d * risk, "tp": c + d * VP["tp_r"] * risk,
                              "va": va, "age": len(closed) - 1 - i}
-                else:
+                elif side == 1:
                     print(f"  VP: {'BUY' if d == 1 else 'SELL'} эвдрэл {fmt_time(t)} — 200 өдрийн чигийн эсрэг тул алгасав")
                 break
     return found
@@ -620,14 +633,14 @@ def supertrend(bars):
     return out
 
 
-def st_signal(bars, daily, now_ms):
-    """200 өдрийн чигийн дагуух хамгийн сүүлийн Supertrend эргэлт ба түүний одоогийн төлөв."""
+def st_signal(bars, daily, now_ms, side=1):
+    """200 өдрийн чигийн дагуух (side=-1 бол эсрэг) хамгийн сүүлийн Supertrend эргэлт ба түүний одоогийн төлөв."""
     closed = [b for b in bars if b["ct"] < now_ms]
     st = supertrend(closed)
     trend = sma_trend_fn(daily)
     for i in range(len(st) - 1, 30, -1):
         d = st[i][0]
-        if d and st[i - 1][0] and d != st[i - 1][0] and trend(closed[i]["ct"] + 1) == d:
+        if d and st[i - 1][0] and d != st[i - 1][0] and trend(closed[i]["ct"] + 1) == d * side:
             break
     else:
         return None
@@ -658,7 +671,7 @@ def st_outcome(bars, st, P, now_ms):
 
 # ---------------------------------------------------------------- 🧪 DTC
 
-def dtc_signal(bars, daily, now_ms):
+def dtc_signal(bars, daily, now_ms, side=1):
     """Хаагдсан лаан дээрх хамгийн сүүлийн DTC дохио (бүх шүүлтүүрийг давсан) ба түүний төлөв."""
     closed = [b for b in bars if b["ct"] < now_ms]
     c = [b["c"] for b in closed]
@@ -680,7 +693,7 @@ def dtc_signal(bars, daily, now_ms):
         d = align(i)
         if not d or align(i - 1) == d or math.isnan(a[i]):
             continue
-        if a[i] < DTC["atr_mult"] * sum(a[i - n:i]) / n or trend(closed[i]["ct"] + 1) != d:
+        if a[i] < DTC["atr_mult"] * sum(a[i - n:i]) / n or trend(closed[i]["ct"] + 1) != d * side:
             continue
         w = closed[i - DTC["sl_bars"] + 1:i + 1]
         e = c[i]
@@ -957,7 +970,9 @@ def smc_message(pair_key, tf, S, price, cancel_prev=None):
     if S.get("htf_tf"):
         lines.append(f"Том хугацааны чиг: {TF[S['htf_tf']][4]} · {'өсөх ↑' if S['dir'] == 1 else 'буурах ↓'}")
     if S.get("sma"):
-        lines.append(f"200 өдрийн чиг: {'өсөх ↑' if S['dir'] == 1 else 'буурах ↓'}")
+        lines.append(trend_line(S["dir"], S.get("ct")))
+    if S.get("ct"):
+        lines.insert(0, CT_HEAD)
     if S["fvg"]:
         lines.append(f"FVG: {fmt_p(S['fvg'][0], dec)} – {fmt_p(S['fvg'][1], dec)}")
     lines += [
@@ -972,6 +987,8 @@ def smc_message(pair_key, tf, S, price, cancel_prev=None):
         lines.append(f"⚠️ Үнэ {fmt_time(S['fill_time'])[-5:]}-д оролтод аль хэдийн хүрсэн.")
     if cancel_prev:
         lines.append(f"↩️ Өмнөх SMC {cancel_prev} санааны захиалгаа цуцална уу.")
+    if S.get("ct"):
+        lines.append(CT_NOTE)
     lines += ["", chart_link(pair_key, tf), "Автомат техник санаа. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -993,7 +1010,7 @@ def smc_transition(pair_key, tf, S, prev):
     return None
 
 
-def vp_message(pair_key, tf, S, price, prev=None):
+def vp_message(pair_key, tf, S, price, prev=None, ct=False):
     dec = PAIRS[pair_key]["dec"]
     d = S["dir"]
     va = S["va"]
@@ -1001,12 +1018,14 @@ def vp_message(pair_key, tf, S, price, prev=None):
     lines = []
     if prev:
         lines += [prev, ""]
+    if ct:
+        lines.append(CT_HEAD)
     lines += [
         f"📦 Volume Profile · {'🟢 BUY' if d == 1 else '🔴 SELL'}",
         f"{PAIRS[pair_key]['name']} · {TF[tf][4]}",
         f"Өмнөх өдрийн Value Area: {fmt_p(va['val'], dec)} – {fmt_p(va['vah'], dec)} (POC {fmt_p(va['poc'], dec)})",
         f"Үнэ VA-гаас {'дээш' if d == 1 else 'доош'} гарч {VP['need']} лаа тогтлоо · {fmt_time(S['time'])}",
-        f"200 өдрийн чиг: {'өсөх ↑' if d == 1 else 'буурах ↓'}",
+        trend_line(d, ct),
         "",
         f"Оролт (Market): {fmt_p(S['entry'], dec)}",
         f"SL: {fmt_p(S['sl'], dec)}  ({'−' if d == 1 else '+'}{fmt_p(risk, dec)})",
@@ -1017,6 +1036,8 @@ def vp_message(pair_key, tf, S, price, prev=None):
     ]
     if S["age"] >= VP["fresh_bars"]:
         lines.append(f"⚠️ Дохио {S['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
+    if ct:
+        lines.append(CT_NOTE)
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -1036,17 +1057,19 @@ def pct_text(entry, price):
     return f"{(price - entry) / entry * 100:+.2f}%"
 
 
-def st_message(pair_key, tf, P, price, prev=None):
+def st_message(pair_key, tf, P, price, prev=None, ct=False):
     p = PAIRS[pair_key]
     dec, d = p["dec"], P["dir"]
     lines = []
     if prev:
         lines += [prev, ""]
+    if ct:
+        lines.append(CT_HEAD)
     lines += [
         f"📈 Supertrend · {'🟢 BUY' if d == 1 else '🔴 SELL'}",
         f"{p['name']} · {TF[tf][4]}",
         f"Дохио гарсан: {fmt_time(P['time'])}",
-        f"200 өдрийн чиг: {'өсөх ↑' if d == 1 else 'буурах ↓'}",
+        trend_line(d, ct),
         "",
         f"Оролт (Market): {fmt_p(P['entry'], dec)}" + (f" ({p['sym']})" if p.get("pct") else ""),
         f"SL: {fmt_p(P['sl'], dec)}  ({pct_text(P['entry'], P['sl'])})",
@@ -1057,6 +1080,8 @@ def st_message(pair_key, tf, P, price, prev=None):
         lines.append(f"ℹ️ Брокерын {pair_key} дээр SL-ийг оролтоос {pct_text(P['entry'], P['sl'])} зайд тавина уу.")
     if P["age"] >= ST["fresh_bars"]:
         lines.append(f"⚠️ Дохио {P['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
+    if ct:
+        lines.append(CT_NOTE)
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -1074,15 +1099,16 @@ def st_close_text(pair_key, tf, rec, out):
             f"{pct_text(rec['entry'], out['exit'])} · Үр дүн ≈ {r:+.1f}R")
 
 
-def dtc_message(pair_key, tf, S, price):
+def dtc_message(pair_key, tf, S, price, ct=False):
     dec = PAIRS[pair_key]["dec"]
     d = S["dir"]
     r = abs(S["entry"] - S["sl"])
-    lines = [
+    lines = [CT_HEAD] if ct else []
+    lines += [
         f"🧪 DTC туршилт · {'🟢 BUY' if d == 1 else '🔴 SELL'}",
         f"{PAIRS[pair_key]['name']} · {TF[tf][4]}",
         f"6 EMA тууз {'өсөх' if d == 1 else 'буурах'} дарааллаар жагслаа · {fmt_time(S['time'])}",
-        f"200 өдрийн чиг: {'өсөх ↑' if d == 1 else 'буурах ↓'}",
+        trend_line(d, ct),
         "",
         f"Оролт (Market): {fmt_p(S['entry'], dec)}",
         f"SL: {fmt_p(S['sl'], dec)}  ({'−' if d == 1 else '+'}{fmt_p(r, dec)})",
@@ -1092,6 +1118,8 @@ def dtc_message(pair_key, tf, S, price):
     ]
     if S["age"] >= DTC["fresh_bars"]:
         lines.append(f"⚠️ Дохио {S['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
+    if ct:
+        lines.append(CT_NOTE)
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -1110,7 +1138,14 @@ def dtc_close_text(pair_key, tf, rec, out):
 
 # ---------------------------------------------------------------- Тайлан (арилжаа бүрийн R-ийг тоолно)
 
-METHOD_NAMES = {"ema": "📊 EMA", "smc": "🧠 SMC", "vp": "📦 VP", "st": "📈 Supertrend", "dtc": "🧪 DTC"}
+METHOD_NAMES = {"ema": "📊 EMA", "smc": "🧠 SMC", "vp": "📦 VP", "st": "📈 Supertrend", "dtc": "🧪 DTC",
+                "smc_ct": "⚠️ SMC эсрэг", "vp_ct": "⚠️ VP эсрэг", "st_ct": "⚠️ Supertrend эсрэг",
+                "dtc_ct": "⚠️ DTC эсрэг"}
+
+
+def ct_tag(msg, ct):
+    """Чигийн эсрэг позицийн мэдэгдлийг ялгаж тэмдэглэнэ."""
+    return ("⚠️ Эсрэг · " + msg) if (ct and msg) else msg
 
 
 def record(state, method, key, r):
@@ -1137,8 +1172,11 @@ def report_text(state, now_ms, days=7):
             lines.append(f"{name}: {len(rs)} арилжаа · {w} ашигтай / {len(rs) - w} алдагдал · {sum(rs):+.1f}R")
             total += sum(rs)
         return lines, total
-    week, wt = block([x for x in led if x["t"] >= since])
-    allr, at = block(led)
+    is_ct = lambda x: x["m"].endswith("_ct")  # noqa: E731
+    main_led = [x for x in led if not is_ct(x)]
+    ct_led = [x for x in led if is_ct(x)]
+    week, wt = block([x for x in main_led if x["t"] >= since])
+    allr, at = block(main_led)
     start = fmt_time(state.get("ledger_start", now_ms))[:5] if led else fmt_time(now_ms)[:5]
     out = [f"📋 Тайлан · сүүлийн {days} хоног ({fmt_time(since)[:5]} – {fmt_time(now_ms)[:5]})"]
     out += week if week else ["Энэ хугацаанд хаагдсан арилжаа алга."]
@@ -1148,6 +1186,13 @@ def report_text(state, now_ms, days=7):
     out += allr if allr else ["Одоогоор хаагдсан арилжаа алга."]
     if allr:
         out.append(f"Нийт: {at:+.1f}R")
+    if ct_led:
+        cw, cwt = block([x for x in ct_led if x["t"] >= since])
+        _, cat = block(ct_led)
+        out += ["", f"⚠️ Чигийн эсрэг (туршилт, дээрх дүнд ороогүй)",
+                f"Сүүлийн {days} хоног: " + (f"{cwt:+.1f}R" if cw else "хаагдсан арилжаа алга")]
+        out += cw
+        out += [f"Эхэлснээс хойш: {cat:+.1f}R"]
     out += ["", "R = нэг арилжааны эрсдэл. Спред, шимтгэлийг тооцоогүй. Limit биелээгүй дохиог тоолоогүй."]
     return "\n".join(out)
 
@@ -1230,6 +1275,15 @@ def main():
              "• SL 1.5 ATR, TP 2R, 24 цагт хүрэхгүй бол хаана. Өдөрт хамгийн ихдээ 1 дохио.")
         state["vp_announced"] = True
 
+    if not state.get("ct_announced") and config.get("counter_trend"):
+        send("⚠️ Шинэ: чигийн ЭСРЭГ дохио (туршилт)\n"
+             "Одоогоос VP, SMC, DTC, Supertrend аргууд 200 өдрийн чигийн эсрэг BUY/SELL дохиог ч илгээнэ. "
+             "Эдгээр нь «⚠️ ЧИГИЙН ЭСРЭГ» гэсэн тэмдэгтэй ирнэ.\n"
+             "• 3 жилийн туршилтаар чигийн эсрэг дохио 5 аргад бүгдэд нь алдагдалтай гарсан (ялалт 27–34%)\n"
+             "• Үр дүнг /report тайланд тусад нь тоолно, үндсэн дүнд оруулахгүй\n"
+             "• Мөнгө тавихгүйгээр 1 сар ажиглаад бодит үр дүнгээр нь шийдье")
+        state["ct_announced"] = True
+
     def track_ema(key, w, bars, res, now_ms, step_ms):
         L = res["last"]
         if not L:
@@ -1259,120 +1313,136 @@ def main():
                 record(state, "ema", key, RULES["tp_r"] if order["status"] == "tp" else -1.0)
             rec["status"] = order["status"]
 
-    def track_smc(key, w, bars, price, now_ms, step_ms, kinds, htf, htf_tf):
+    def track_smc(key, w, bars, price, now_ms, step_ms, kinds, htf, htf_tf, ct=False):
+        bucket = "smc_ct" if ct else "smc"
+        label = "SMC эсрэг" if ct else "SMC"
         S = smc_setup(bars, now_ms, step_ms, kinds, htf)
         if S:
             S["htf_tf"] = htf_tf
             S["sma"] = bool(w.get("smc_sma"))
+            S["ct"] = ct
         if not S:
-            print(f"{key}: SMC бүтэц алга")
+            print(f"{key}: {label} бүтэц алга")
             return
-        rec = state["smc"].get(key)
-        print(f"{key}: SMC {S['kind']} {'BUY' if S['dir'] == 1 else 'SELL'} {fmt_time(S['time'])} · {S['status']}")
+        rec = state.setdefault(bucket, {}).get(key)
+        print(f"{key}: {label} {S['kind']} {'BUY' if S['dir'] == 1 else 'SELL'} {fmt_time(S['time'])} · {S['status']}")
         if not rec or rec.get("time") != S["time"]:
-            if S["status"] in ("pending", "filled"):
+            if ct and not rec and S["status"] != "pending":
+                print("  (анх нэмэгдсэн тул хуучин санааг илгээхгүй, зөвхөн тэмдэглэв)")
+            elif S["status"] in ("pending", "filled"):
                 cancel_prev = None
                 if rec and rec.get("status") == "pending":
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
                 send(smc_message(w["pair"], w["tf"], S, price, cancel_prev))
-                print("  → SMC санаа илгээлээ")
-                state["smc"][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"], "sent": True}
+                print(f"  → {label} санаа илгээлээ")
+                state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"], "sent": True}
                 return
-            state["smc"][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"]}
+            state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"]}
             return
         if S["status"] != rec.get("status"):
-            msg = smc_transition(w["pair"], w["tf"], S, rec.get("status"))
+            msg = ct_tag(smc_transition(w["pair"], w["tf"], S, rec.get("status")), ct)
             if msg:
                 send(msg)
-                print(f"  → SMC {rec.get('status')} → {S['status']}")
+                print(f"  → {label} {rec.get('status')} → {S['status']}")
             if rec.get("sent") and S["status"] in ("tp", "sl"):
-                record(state, "smc", key, SMC["tp_r"] if S["status"] == "tp" else -1.0)
+                record(state, bucket, key, SMC["tp_r"] if S["status"] == "tp" else -1.0)
             rec["status"] = S["status"]
 
-    def track_vp(key, w, now_ms):
+    def track_vp(key, w, now_ms, ct=False):
+        bucket = "vp_ct" if ct else "vp"
+        label = "VP эсрэг" if ct else "VP"
         step_ms = TF["1h"][0] * 1000
-        pbars = [b for b in fetch_binance(VP["sym"], "1h") if market_open(b["ct"] + 1 - step_ms)]
+        if "vp_1h" not in cache:
+            cache["vp_1h"] = [b for b in fetch_binance(VP["sym"], "1h") if market_open(b["ct"] + 1 - step_ms)]
+        pbars = cache["vp_1h"]
         daily = get_daily()
         if len(pbars) < 100 or len(daily) < VP["sma"] + 5:
             raise DataError(f"VP: өгөгдөл хүрэлцэхгүй ({len(pbars)} цаг, {len(daily)} өдөр)")
-        rec = state["vp"].get(key)
+        rec = state.setdefault(bucket, {}).get(key)
         price = pbars[-1]["c"]
         prev = None
         if rec and rec.get("status") == "open":
             st, t_ms, px = vp_outcome(pbars, rec, now_ms)
             if st != "open":
-                prev = vp_close_text(w["pair"], w["tf"], rec, st, t_ms, px)
+                prev = ct_tag(vp_close_text(w["pair"], w["tf"], rec, st, t_ms, px), ct)
                 if rec.get("sent"):
-                    record(state, "vp", key, (px - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
+                    record(state, bucket, key, (px - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
                 rec["status"] = st
-        S = vp_signal(pbars, daily, now_ms, step_ms)
+        S = vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1)
         trend = sma_trend_fn(daily)(now_ms)
-        print(f"{key}: VP {'BUY' if S and S['dir'] == 1 else 'SELL' if S else 'дохио алга'}"
+        print(f"{key}: {label} {'BUY' if S and S['dir'] == 1 else 'SELL' if S else 'дохио алга'}"
               f"{' ' + fmt_time(S['time']) if S else ''} · 200 өдрийн чиг {'↑' if trend == 1 else '↓' if trend == -1 else '?'}")
         # Өмнөх позиц нээлттэй бол шинэ дохио авахгүй (туршилттай адил: нэг удаад нэг позиц)
         if S and (not rec or rec.get("time") != S["time"]) and not (rec and rec.get("status") == "open"):
             st, t_ms, px = vp_outcome(pbars, S, now_ms)
-            if st == "open":
-                send(vp_message(w["pair"], w["tf"], S, price, prev))
-                print("  → VP дохио илгээлээ")
-                prev = None
-            state["vp"][key] = {"time": S["time"], "dir": S["dir"], "entry": S["entry"], "sl": S["sl"],
-                                "tp": S["tp"], "status": st, "sent": st == "open"}
+            sent = False
+            if ct and not rec and (S["age"] >= VP["fresh_bars"] or now_ms - S["time"] > VP["fresh_bars"] * step_ms):
+                print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
+            elif st == "open":
+                send(vp_message(w["pair"], w["tf"], S, price, prev, ct))
+                print(f"  → {label} дохио илгээлээ")
+                prev, sent = None, True
+            state[bucket][key] = {"time": S["time"], "dir": S["dir"], "entry": S["entry"], "sl": S["sl"],
+                                  "tp": S["tp"], "status": st, "sent": sent}
         if prev:
             send(prev)
-            print("  → VP позиц хаагдлаа")
+            print(f"  → {label} позиц хаагдлаа")
 
-    def track_st(key, w, bars, now_ms):
+    def track_st(key, w, bars, now_ms, ct=False):
+        bucket = "st_ct" if ct else "st"
+        label = "Supertrend эсрэг" if ct else "Supertrend"
         daily = get_daily_td(w["pair"])
         if len(daily) < VP["sma"] + 5:
             raise DataError(f"{key}: өдрийн өгөгдөл хүрэлцэхгүй ({len(daily)})")
-        rec = state["st"].get(key)
+        rec = state.setdefault(bucket, {}).get(key)
         price = bars[-1]["c"]
         prev = None
         if rec and rec.get("status") == "open":
             out = st_outcome(bars, supertrend([b for b in bars if b["ct"] < now_ms]), rec, now_ms)
             if out:
-                prev = st_close_text(w["pair"], w["tf"], rec, out)
+                prev = ct_tag(st_close_text(w["pair"], w["tf"], rec, out), ct)
                 if rec.get("sent"):
-                    record(state, "st", key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
+                    record(state, bucket, key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
                 rec["status"] = out["status"]
-        P = st_signal(bars, daily, now_ms)
-        print(f"{key}: Supertrend {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) + ' · ' + P['status'] if P else 'дохио алга'}")
+        P = st_signal(bars, daily, now_ms, side=-1 if ct else 1)
+        print(f"{key}: {label} {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) + ' · ' + P['status'] if P else 'дохио алга'}")
         if P and (not rec or rec.get("time") != P["time"]) and not (rec and rec.get("status") == "open"):
-            if not rec and P["age"] >= ST["fresh_bars"]:
+            if not rec and (P["age"] >= ST["fresh_bars"] or now_ms - P["time"] > ST["fresh_bars"] * TF[w["tf"]][0] * 1000):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif P["status"] == "open":
-                send(st_message(w["pair"], w["tf"], P, price, prev))
-                print("  → Supertrend дохио илгээлээ")
+                send(st_message(w["pair"], w["tf"], P, price, prev, ct))
+                print(f"  → {label} дохио илгээлээ")
                 prev = None
                 P["sent"] = True
-            state["st"][key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "status", "sent")}
+            state[bucket][key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "status", "sent")}
         if prev:
             send(prev)
-            print("  → Supertrend позиц хаагдлаа")
+            print(f"  → {label} позиц хаагдлаа")
 
-    def track_dtc(key, w, bars, now_ms):
+    def track_dtc(key, w, bars, now_ms, ct=False):
+        bucket = "dtc_ct" if ct else "dtc"
+        label = "DTC эсрэг" if ct else "DTC"
         daily = get_daily()
-        rec = state["dtc"].get(key)
+        rec = state.setdefault(bucket, {}).get(key)
         price = bars[-1]["c"]
         if rec and rec.get("status") == "open":
             out = dtc_outcome(bars, rec, now_ms)
             if out:
-                send(dtc_close_text(w["pair"], w["tf"], rec, out))
+                send(ct_tag(dtc_close_text(w["pair"], w["tf"], rec, out), ct))
                 if rec.get("sent"):
-                    record(state, "dtc", key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
+                    record(state, bucket, key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
                 rec["status"] = out["status"]
-                print(f"  → DTC позиц хаагдлаа ({out['status']})")
-        S = dtc_signal(bars, daily, now_ms)
-        print(f"{key}: DTC {('BUY' if S['dir'] == 1 else 'SELL') + ' ' + fmt_time(S['time']) + ' · ' + S['status'] if S else 'дохио алга'}")
+                print(f"  → {label} позиц хаагдлаа ({out['status']})")
+        S = dtc_signal(bars, daily, now_ms, side=-1 if ct else 1)
+        print(f"{key}: {label} {('BUY' if S['dir'] == 1 else 'SELL') + ' ' + fmt_time(S['time']) + ' · ' + S['status'] if S else 'дохио алга'}")
         if S and (not rec or rec.get("time") != S["time"]) and not (rec and rec.get("status") == "open"):
-            if not rec and S["age"] >= DTC["fresh_bars"]:
+            if not rec and (S["age"] >= DTC["fresh_bars"] or now_ms - S["time"] > DTC["fresh_bars"] * TF[w["tf"]][0] * 1000):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif S["status"] == "open":
-                send(dtc_message(w["pair"], w["tf"], S, price))
-                print("  → DTC дохио илгээлээ")
+                send(dtc_message(w["pair"], w["tf"], S, price, ct))
+                print(f"  → {label} дохио илгээлээ")
                 S["sent"] = True
-            state["dtc"][key] = {k: S.get(k) for k in ("time", "dir", "entry", "sl", "tp", "status", "sent")}
+            state[bucket][key] = {k: S.get(k) for k in ("time", "dir", "entry", "sl", "tp", "status", "sent")}
 
     errors, now_ms = [], int(time.time() * 1000)
     last_fetch = load_json(FETCH_FILE, {})
@@ -1432,32 +1502,42 @@ def main():
                 track_ema(key, w, bars, analyze(bars, now_ms), now_ms, step_ms)
             else:
                 print(f"{key}: EMA-д лаа хүрэлцэхгүй ({len(bars)})")
-        if w.get("dtc"):
-            try:
-                track_dtc(key, w, bars, now_ms)
-            except Exception as e:  # noqa: BLE001
-                print("DTC АЛДАА", key, e)
-        if w.get("st"):
-            try:
-                track_st(key, w, bars, now_ms)
-            except Exception as e:  # noqa: BLE001
-                print("Supertrend АЛДАА", key, e)
-        if w.get("vp"):
-            try:
-                track_vp(key, w, now_ms)
-            except Exception as e:  # noqa: BLE001
-                print("VP АЛДАА", key, e)
+        ct_on = bool(config.get("counter_trend")) and w.get("ct", True)
+        sides = (False, True) if ct_on else (False,)
+        for ct in sides:
+            if w.get("dtc"):
+                try:
+                    track_dtc(key, w, bars, now_ms, ct)
+                except Exception as e:  # noqa: BLE001
+                    print("DTC АЛДАА", key, ct, e)
+            if w.get("st"):
+                try:
+                    track_st(key, w, bars, now_ms, ct)
+                except Exception as e:  # noqa: BLE001
+                    print("Supertrend АЛДАА", key, ct, e)
+            if w.get("vp"):
+                try:
+                    track_vp(key, w, now_ms, ct)
+                except Exception as e:  # noqa: BLE001
+                    print("VP АЛДАА", key, ct, e)
         if w.get("smc", True):
             try:
                 htf_tf, htf = w.get("smc_htf"), None
                 if htf_tf:
                     htf = htf_trend_fn(get_bars(pair, htf_tf), now_ms)
+                kinds = tuple(w.get("smc_kinds", ["BOS", "CHoCH"]))
                 if w.get("smc_sma"):
                     # 200 өдрийн чигийн шүүлтүүр: том хугацааны чиг ба 200 өдрийн чиг хоёулаа таарах ёстой
                     sma, base = sma_trend_fn(get_daily()), htf
-                    htf = (lambda t, sma=sma, base=base: sma(t) if (base is None or base(t) == sma(t)) else 0)
-                kinds = tuple(w.get("smc_kinds", ["BOS", "CHoCH"]))
-                track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, htf, htf_tf)
+                    with_tr = (lambda t, sma=sma, base=base: sma(t) if (base is None or base(t) == sma(t)) else 0)
+                    track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, with_tr, htf_tf)
+                    if ct_on:
+                        # Чигийн эсрэг: том хугацааны чигийн дагуу, гэхдээ 200 өдрийн чигийн эсрэг
+                        against = (lambda t, sma=sma, base=base:
+                                   -sma(t) if base is None else (base(t) if base(t) and sma(t) == -base(t) else 0))
+                        track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, against, htf_tf, True)
+                else:
+                    track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, htf, htf_tf)
             except Exception as e:  # noqa: BLE001
                 print("SMC АЛДАА", key, e)
 
