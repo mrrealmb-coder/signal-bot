@@ -14,6 +14,20 @@
   },
   "ct_announced": true,
   "day": {
+    "smc|XAUUSD|5m": {
+      "copy": false,
+      "cut": 1793306700000,
+      "dir": -1,
+      "entry": 4030.645,
+      "kind": "scalp",
+      "led": "smc_s",
+      "pair": "XAUUSD",
+      "px": null,
+      "sl": 4035.7200162824774,
+      "status": "pending",
+      "tf": "5m",
+      "time": 1793290200000
+    },
     "st|XAUUSD|1h": {
       "copy": false,
       "cut": 1793306700000,
@@ -230,8 +244,9 @@
     },
     "XAUUSD|5m": {
       "dir": -1,
-      "status": "skip",
-      "time": 1793263800000
+      "sent": true,
+      "status": "pending",
+      "time": 1793290200000
     }
   },
   "smc_announced": true,
