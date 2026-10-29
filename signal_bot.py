@@ -116,13 +116,17 @@ def day_cut(t_ms):
     return None
 
 
-def add_day_line(msg, cut, limit=False):
-    """Дохионы мэдэгдэлд 📅 Day мөрийг (график холбоосын өмнө) нэмнэ."""
+def add_day_line(msg, cut, limit=False, scalp=False):
+    """Дохионы мэдэгдэлд 📅 Day (scalp=True бол ⚡ Scalp) мөрийг (график холбоосын өмнө) нэмнэ."""
     lines = msg.split("\n")
-    note = (f"📅 Day арилжаа: {fmt_time(cut)[-5:]} (IC Markets-ийн өдрийн хаалт, swap-аас өмнө) хүртэл хаагдаагүй бол "
-            "бот «Day хаах» мэдэгдэл илгээнэ. Swing-ээр барих бол үргэлжлүүлж болно.")
+    if scalp:
+        note = (f"⚡ Scalp: {fmt_time(cut)[-5:]} (IC Markets-ийн өдрийн хаалт) хүртэл TP/SL-д хүрэхгүй бол бот "
+                "«Scalp хаах» мэдэгдэл илгээнэ.")
+    else:
+        note = (f"📅 Day арилжаа: {fmt_time(cut)[-5:]} (IC Markets-ийн өдрийн хаалт, swap-аас өмнө) хүртэл хаагдаагүй бол "
+                "бот «Day хаах» мэдэгдэл илгээнэ. Swing-ээр барих бол үргэлжлүүлж болно.")
     if limit:
-        note += " Limit тэр хүртэл биелэхгүй бол day-д цуцална."
+        note += " Limit тэр хүртэл биелэхгүй бол цуцална." if scalp else " Limit тэр хүртэл биелэхгүй бол day-д цуцална."
     return "\n".join(lines[:-3] + [note] + lines[-3:])
 
 # 🧪 DTC (DTC Trading Club индикаторын нийтэлсэн тайлбараар хуулбарласан) — туршилтын дохио.
@@ -530,7 +534,7 @@ def htf_trend_fn(htf_bars, now_ms):
     return at
 
 
-def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None):
+def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None, min_risk=0.0):
     """Шүүлтүүрт таарсан хамгийн сүүлийн бүтцийн эвдрэлээс SMC оролтын санаа гаргаж, төлөвийг нь буцаана.
 
     Өсөх эвдрэл: хаалт сүүлийн swing high-аас дээш гарна. Order Block = swing high-аас эвдрэл хүртэлх
@@ -580,7 +584,8 @@ def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None):
         "expires": bars[event["idx"]]["ct"] + 1 + SMC["valid_bars"] * step_ms,
         "status": "pending", "fill_time": None, "close_time": None,
     }
-    if not (SMC["min_risk_atr"] * ev_atr <= risk <= SMC["max_risk_atr"] * ev_atr):
+    # min_risk (үнийн нэгжээр): 5 минутад SL хэт ойр бол спред/шимтгэл ашгийг иднэ (туршилтаар алтанд $4)
+    if not (SMC["min_risk_atr"] * ev_atr <= risk <= SMC["max_risk_atr"] * ev_atr) or risk < min_risk:
         setup["status"] = "skip"
         return setup
 
@@ -924,13 +929,14 @@ def chat_name(chat):
 ROLE_TEXT = {
     "/swing": "✅ Энэ чат: 📈 Swing. Бүх дохио ирнэ (📅 Day мөр, «Day хаах» мэдэгдэлгүй).",
     "/day": "✅ Энэ чат: 📅 Day арилжаа. Зөвхөн алтны day дохио, тэдгээрийн хаах мэдэгдэл ирнэ.",
-    "/scalp": ("✅ Энэ чат: ⚡ Scalp. Зөвхөн алтны 5 минутын 🧪 AMD скальп дохио, түүний хаах мэдэгдэл ирнэ.\n"
-               "Дүрэм (Нью-Йоркийн цагаар): 02:00–07:00-ийн хүрээ (Consolidation) → 07:00–11:00-д нэг талыг нь "
-               "цоолоод буцаж хүрээнд хаагдвал (Manipulation) эсрэг тийш орно, зөвхөн 200 өдрийн чигийн дагуу. "
-               "SL цоолсон оргилын цаана, TP хүрээний дунд (≤ 2R).\n"
-               "Монголын цагаар хүрээ 14:00–19:00, дохио 19:00–23:00 хооронд (11/2-ноос 1 цаг хойшилно), "
-               "долоо хоногт ~1–2 удаа ирнэ. "
-               "Позиц ихэвчлэн 20–45 минутад хаагдана."),
+    "/scalp": ("✅ Энэ чат: ⚡ Scalp. Алтны богино хугацааны 3 төрлийн дохио (бүгд 200 өдрийн чигийн дагуу, "
+               "IC Markets-ийн өдрийн хаалтаас өмнө хаана), долоо хоногт нийт ~5:\n"
+               "• ⚡ AMD 5 минут (🧪): Нью-Йоркийн 02:00–07:00-ийн хүрээ (Монголын 14:00–19:00) → 07:00–11:00-д нэг талыг "
+               "нь цоолоод буцаж хүрээнд хаагдвал эсрэг тийш. SL цоолсон оргилын цаана, TP хүрээний дунд (≤ 2R). "
+               "~1.5/долоо хоног\n"
+               "• 🧠 SMC 15 минут: Day группийнхтэй ижил дохио (BOS → Order Block limit). ~1.8/долоо хоног\n"
+               "• 🧪 SMC 5 минут: BOS + 1 цагийн бүтэц, SL ≥ $4. ~1.7/долоо хоног, тайланд тусад нь тоолно\n"
+               "Позиц ихэвчлэн 20–60 минутад хаагдана. 11/2-ноос цаг 1 цагаар хойшилно."),
     "/all": "✅ Энэ чат бүх дохиог (Swing + Day) авна.",
     "/off": "🔕 Энэ чатад дохио илгээхгүй. Дахин авах бол /all, /swing, /day эсвэл /scalp гэж бичнэ үү.",
 }
@@ -1560,7 +1566,8 @@ def dtc_close_text(pair_key, tf, rec, out):
 METHOD_NAMES = {"ema": "📊 EMA", "smc": "🧠 SMC", "vp": "📦 VP", "st": "📈 Supertrend", "dtc": "🧪 DTC",
                 "smc_ct": "⚠️ SMC эсрэг", "vp_ct": "⚠️ VP эсрэг", "st_ct": "⚠️ Supertrend эсрэг",
                 "dtc_ct": "⚠️ DTC эсрэг", "st_t": "🧪 Supertrend", "smc_t": "🧪 SMC",
-                "smc_d": "📅 SMC day", "vp_d": "📅 VP day", "st_d": "📅 Supertrend day", "amd_s": "⚡ AMD scalp"}
+                "smc_d": "📅 SMC day", "vp_d": "📅 VP day", "st_d": "📅 Supertrend day", "amd_s": "⚡ AMD scalp",
+                "smc_s": "🧪 SMC scalp"}
 # "_t" төгсгөлтэй арга = 🧪 туршилтын хослол (config-д "test": true), "_s" = ⚡ Scalp. Тайланд тусад нь тоолно.
 
 
@@ -1688,16 +1695,17 @@ def main():
 
     roles = state.setdefault("chat_roles", {})
 
-    def send(text, kind="all", swing_text=None, photo=None):
+    def send(text, kind="all", swing_text=None, photo=None, also_scalp=False):
         """kind: "all" = бүх чат, "swing" = Day чатад илгээхгүй, "day" = Swing чатад илгээхгүй,
         "scalp" = зөвхөн ⚡ Scalp чатад (Scalp чат өөр юу ч авахгүй; 7 хоногийн тайланг тусад нь илгээнэ).
         Чатын үүрэг (эзэмшигч группт /swing, /day, /scalp, /all, /off гэж тохируулна): тохируулаагүй чат scalp-аас
-        бусдыг авна. swing_text: Swing чатад өөр (📅 мөргүй) хувилбар илгээх бол."""
+        бусдыг авна. swing_text: Swing чатад өөр (📅 мөргүй) хувилбар илгээх бол.
+        also_scalp: Scalp чатад ч давхар илгээнэ (config-д "scalp_copy": true — алтны 15 минутын SMC day дохио)."""
         for cid in list(chats):
             role = roles.get(cid)
             if role == "off" or (role == "day" and kind == "swing") or (role == "swing" and kind == "day"):
                 continue
-            if (kind == "scalp") != (role == "scalp"):
+            if (kind == "scalp") != (role == "scalp") and not (also_scalp and role == "scalp"):
                 continue
             t = swing_text if (role == "swing" and swing_text) else text
             ok = try_send_photo(token, cid, photo, t) if photo else None
@@ -1782,24 +1790,32 @@ def main():
 
     def day_msg(w, m, key, msg, P, limit=False):
         """Дохио илгээхийн өмнө: day-д тохирвол мөр нэмж, бүртгэнэ."""
-        cut = day_cut(P["time"]) if w.get("day") else None
+        scalp = bool(w.get("scalp"))
+        cut = day_cut(P["time"]) if (w.get("day") or scalp) else None
         if not cut or now_ms >= cut:
             return msg
         days[f"{m}|{key}"] = {"time": P["time"], "dir": P["dir"], "entry": P["entry"], "sl": P["sl"], "cut": cut,
                               "status": "pending" if limit else "open", "pair": w["pair"], "tf": w["tf"],
                               # алтны VP-ийн оролт PAXG-ийн үнээр тул хаах үнийг ч PAXG-аас авна
-                              "px": VP["sym"] if (m == "vp" and w["pair"] == "XAUUSD") else None}
-        return add_day_line(msg, cut, limit)
+                              "px": VP["sym"] if (m == "vp" and w["pair"] == "XAUUSD") else None,
+                              # ⚡ Scalp хослол: зөвхөн Scalp чатад, үр дүн "_s"; scalp_copy: Day дохиог Scalp чатад ч
+                              "kind": "scalp" if scalp else "day", "led": m + ("_s" if scalp else "_d"),
+                              "copy": bool(w.get("scalp_copy")) and not scalp}
+        return add_day_line(msg, cut, limit, scalp)
+
+    def day_open(m, key, t):
+        d = days.get(f"{m}|{key}")
+        return d if d and d["time"] == t and d["status"] in ("open", "pending") else None
 
     def kind_for(m, key, t):
         """Позицийн мэдэгдэл: day-ээр нээлттэй бол хоёр чатад, үгүй бол зөвхөн Swing чатад."""
-        d = days.get(f"{m}|{key}")
-        return "all" if d and d["time"] == t and d["status"] in ("open", "pending") else "swing"
+        return "all" if day_open(m, key, t) else "swing"
 
-    def send_signal(msg, dmsg, photo=None):
-        """Шинэ дохио: day-д тохирвол хоёр чатад (Swing чатад 📅 мөргүй), үгүй бол зөвхөн Swing чатад."""
+    def send_signal(msg, dmsg, photo=None, copy=False):
+        """Шинэ дохио: day-д тохирвол хоёр чатад (Swing чатад 📅 мөргүй), үгүй бол зөвхөн Swing чатад.
+        copy: day-д тохирсон бол Scalp чатад ч (📅 мөртэй хувилбар)."""
         if dmsg != msg:
-            send(dmsg, "all", swing_text=msg, photo=photo)
+            send(dmsg, "all", swing_text=msg, photo=photo, also_scalp=copy)
         else:
             send(msg, "swing", photo=photo)
 
@@ -1808,9 +1824,9 @@ def main():
 
     def day_result(m, key, t, r):
         """Үндсэн позиц хаалтаас өмнө хаагдвал day-ийн үр дүн ижил."""
-        d = days.get(f"{m}|{key}")
-        if d and d["time"] == t and d["status"] in ("open", "pending"):
-            record(state, m + "_d", key, r)
+        d = day_open(m, key, t)
+        if d:
+            record(state, d.get("led", m + "_d"), key, r)
             d["status"] = "done"
 
     def day_fill(m, key, t, status):
@@ -1822,11 +1838,14 @@ def main():
         for dk, d in days.items():
             if d["status"] not in ("open", "pending") or now_ms < d["cut"]:
                 continue
+            sc = d.get("kind") == "scalp"
+            dkind, copy = ("scalp" if sc else "day"), bool(d.get("copy"))
             if d["status"] == "pending":
                 d["status"] = "cancel"
-                send(f"📅 Day · {METHOD_NAMES.get(dk.split('|')[0], '')} · {head(d['pair'], d['tf'], d['dir'])}\n"
+                send(f"{'⚡ Scalp' if sc else '📅 Day'} · {METHOD_NAMES.get(dk.split('|')[0], '')} · "
+                     f"{head(d['pair'], d['tf'], d['dir'])}\n"
                      f"Limit {fmt_p(d['entry'], PAIRS[d['pair']]['dec'])} өдрийн хаалт хүртэл биелсэнгүй. "
-                     "Day-ээр бол захиалгаа цуцална уу.", "day")
+                     + ("Захиалгаа цуцална уу." if sc else "Day-ээр бол захиалгаа цуцална уу."), dkind, also_scalp=copy)
                 continue
             try:
                 if d.get("px"):
@@ -1840,11 +1859,16 @@ def main():
             m, key = dk.split("|", 1)
             r = (price - d["entry"]) * d["dir"] / abs(d["entry"] - d["sl"])
             dec = PAIRS[d["pair"]]["dec"]
-            send(f"📅 Day хаах · {METHOD_NAMES.get(m, m)} · {head(d['pair'], d['tf'], d['dir'])}\n"
-                 f"IC Markets-ийн өдрийн хаалт (swap) ойртлоо. Day арилжаагаа {fmt_p(price, dec)} орчимд хаана уу. "
-                 f"Үр дүн ≈ {r:+.1f}R\n"
-                 "Swing-ээр барьж байгаа бол үндсэн дохионы хаах мэдэгдлийг хүлээнэ.", "day")
-            record(state, m + "_d", key, r)
+            if sc:
+                send(f"⚡ Scalp хаах · {METHOD_NAMES.get(m, m)} · {head(d['pair'], d['tf'], d['dir'])}\n"
+                     f"IC Markets-ийн өдрийн хаалт ойртлоо. TP/SL-д хүрээгүй тул {fmt_p(price, dec)} орчимд хаана уу. "
+                     f"Үр дүн ≈ {r:+.1f}R", "scalp")
+            else:
+                send(f"📅 Day хаах · {METHOD_NAMES.get(m, m)} · {head(d['pair'], d['tf'], d['dir'])}\n"
+                     f"IC Markets-ийн өдрийн хаалт (swap) ойртлоо. Day арилжаагаа {fmt_p(price, dec)} орчимд хаана уу. "
+                     f"Үр дүн ≈ {r:+.1f}R\n"
+                     "Swing-ээр барьж байгаа бол үндсэн дохионы хаах мэдэгдлийг хүлээнэ.", "day", also_scalp=copy)
+            record(state, d.get("led", m + "_d"), key, r)
             d["status"] = "done"
             print(f"  → 📅 Day хаах {dk} {r:+.2f}R")
         for dk in [k for k, d in days.items() if d["status"] in ("done", "cancel") and now_ms - d["cut"] > 3 * 86400000]:
@@ -1882,7 +1906,9 @@ def main():
     def track_smc(key, w, bars, price, now_ms, step_ms, kinds, htf, htf_tf, ct=False):
         bucket = "smc_ct" if ct else "smc"
         label = "SMC эсрэг" if ct else "SMC"
-        S = smc_setup(bars, now_ms, step_ms, kinds, htf)
+        scalp = bool(w.get("scalp")) and not ct   # ⚡ зөвхөн Scalp чатад, IC-ийн өдрийн хаалтаар хаана
+        copy = bool(w.get("scalp_copy")) and not ct
+        S = smc_setup(bars, now_ms, step_ms, kinds, htf, float(w.get("smc_min_risk", 0)))
         if S:
             S["htf_tf"] = htf_tf
             S["sma"] = bool(w.get("smc_sma"))
@@ -1894,7 +1920,7 @@ def main():
         rec = state.setdefault(bucket, {}).get(key)
         print(f"{key}: {label} {S['kind']} {'BUY' if S['dir'] == 1 else 'SELL'} {fmt_time(S['time'])} · {S['status']}")
         if not rec or rec.get("time") != S["time"]:
-            if ct and not rec and S["status"] != "pending":
+            if (ct or scalp) and not rec and S["status"] != "pending":
                 print("  (анх нэмэгдсэн тул хуучин санааг илгээхгүй, зөвхөн тэмдэглэв)")
             elif S["status"] in ("pending", "filled"):
                 cancel_prev = None
@@ -1902,11 +1928,19 @@ def main():
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
                 msg = smc_message(w["pair"], w["tf"], S, price, cancel_prev)
                 dmsg = msg if ct else day_msg(w, bucket, key, msg, S, limit=S["status"] == "pending")
+                if scalp and dmsg == msg:
+                    # IC-ийн сессээс гадуур (туршилтад оруулаагүй) — илгээхгүй
+                    print(f"  ({label} scalp: IC сессээс гадуур тул илгээхгүй)")
+                    state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"]}
+                    return
                 png = render_chart([b for b in bars if b["ct"] < now_ms], step_ms, chart_title(w, "SMC " + S["kind"], S["dir"]),
                                    S, "smc", {"level": S["level"], "level_time": S["level_time"], "ob": S["ob"],
                                               "ob_time": S.get("ob_time"), "fvg": S["fvg"], "label": S["kind"],
                                               "dec": PAIRS[w["pair"]]["dec"]}, n_before=50)
-                send_signal(msg, dmsg, png)
+                if scalp:
+                    send(dmsg, "scalp", photo=png)
+                else:
+                    send_signal(msg, dmsg, png, copy)
                 print(f"  → {label} санаа илгээлээ")
                 state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"], "sent": True}
                 return
@@ -1914,12 +1948,18 @@ def main():
             return
         if S["status"] != rec.get("status"):
             msg = ct_tag(smc_transition(w["pair"], w["tf"], S, rec.get("status")), ct)
-            if msg:
-                send(msg, "swing" if ct else kind_for(bucket, key, S["time"]))
+            dopen = None if ct else day_open(bucket, key, S["time"])
+            if msg and scalp:
+                if dopen and rec.get("sent"):   # өдрийн хаалтаар хаасны дараах мэдэгдлийг Scalp чатад илгээхгүй
+                    send(msg, "scalp")
+                    print(f"  → {label} scalp {rec.get('status')} → {S['status']}")
+            elif msg:
+                send(msg, "swing" if ct else kind_for(bucket, key, S["time"]), also_scalp=copy and bool(dopen))
                 print(f"  → {label} {rec.get('status')} → {S['status']}")
             if rec.get("sent") and S["status"] in ("tp", "sl"):
                 r = SMC["tp_r"] if S["status"] == "tp" else -1.0
-                record(state, bucket + ("_t" if w.get("test") else ""), key, r)
+                if not scalp:   # scalp-ийн үр дүнг зөвхөн day бүртгэлээр ("smc_s") тоолно
+                    record(state, bucket + ("_t" if w.get("test") else ""), key, r)
                 if not ct:
                     day_result(bucket, key, S["time"], r)
             elif not ct:
