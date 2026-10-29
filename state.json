@@ -14,6 +14,20 @@
   },
   "ct_announced": true,
   "day": {
+    "st|XAUUSD|1h": {
+      "copy": false,
+      "cut": 1793306700000,
+      "dir": -1,
+      "entry": 4018.56,
+      "kind": "day",
+      "led": "st_d",
+      "pair": "XAUUSD",
+      "px": null,
+      "sl": 4069.2746282395647,
+      "status": "open",
+      "tf": "1h",
+      "time": 1793275200000
+    },
     "vp|XAUUSD|1h": {
       "cut": 1793306700000,
       "dir": -1,
@@ -264,11 +278,11 @@
     },
     "XAUUSD|1h": {
       "dir": -1,
-      "entry": 4032.66,
-      "sent": null,
-      "sl": 4063.7622925676596,
-      "status": "sl",
-      "time": 1793163600000
+      "entry": 4018.56,
+      "sent": true,
+      "sl": 4069.2746282395647,
+      "status": "open",
+      "time": 1793275200000
     }
   },
   "st_announced": true,
