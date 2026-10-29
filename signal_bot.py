@@ -144,6 +144,28 @@ CT_NOTE = ("⚠️ 200 өдрийн чигийн эсрэг дохио. 3 жил
            "(ялалт ~30%). Мөнгө тавихгүйгээр ажиглана уу.")
 
 
+
+# 💵 Эрсдэлийн хэмжээ (config: "risk_usd", анхдагч $30): алтны дохио бүрт SL-ийн зайнаас лотын хэмжээг тооцно.
+# IC Markets-ийн XAUUSD: 1 лот = 100 унц → үнэ $1 хөдлөхөд 1 лотод $100.
+RISK = {"usd": 30.0}
+
+
+def lot_lines(pair_key, entry, sl):
+    if pair_key != "XAUUSD" or not RISK["usd"] or entry is None or sl is None:
+        return []
+    dist = abs(entry - sl)
+    if dist <= 0:
+        return []
+    raw = RISK["usd"] / (dist * 100)
+    lots = math.floor(raw * 100 + 1e-9) / 100
+    up = math.ceil(raw * 100 - 1e-9) / 100
+    if up * dist * 100 <= 1.2 * RISK["usd"]:   # 0.01 лотын алхмаас болж эрсдэл хэт багасахгүй, ≤ 20% илүүг зөвшөөрнө
+        lots = up
+    if lots < 0.01:
+        return [f"💵 ${RISK['usd']:g} эрсдэлд SL хэт хол ({dist:.2f}$): хамгийн бага 0.01 лотоор ч алдагдал "
+                f"≈ ${dist:.0f} болно."]
+    return [f"💵 ${RISK['usd']:g} эрсдэлээр: {lots:.2f} лот (SL {dist:.2f}$ зай · SL цохивол ≈ −${lots * dist * 100:.0f})"]
+
 def trend_line(d, ct=False, kind="sma"):
     t = -d if ct else d
     name = f"4 цагийн чиг (EMA{H4_EMA})" if kind == "4h_ema50" else "200 өдрийн чиг"
@@ -1311,6 +1333,7 @@ def order_message(pair_key, tf, L, order, price, market_ok, cancel_prev=None):
         lines.append(f"⚠️ Үнэ {fmt_time(order['fill_time'])[-5:]}-д limit-д аль хэдийн хүрсэн.")
     if cancel_prev:
         lines.append(f"↩️ Өмнөх {cancel_prev} limit захиалгаа цуцална уу.")
+    lines += lot_lines(pair_key, order['limit'], order['sl'])
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -1369,6 +1392,7 @@ def smc_message(pair_key, tf, S, price, cancel_prev=None):
         lines.append("🧪 Туршилтын санаа: бодит үр дүнг 1 сар ажиглана. Мөнгө тавихгүйгээр дагаж үзээрэй.")
     if S.get("ct"):
         lines.append(CT_NOTE)
+    lines += lot_lines(pair_key, S['entry'], S['sl'])
     lines += ["", chart_link(pair_key, tf), "Автомат техник санаа. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -1420,6 +1444,7 @@ def vp_message(pair_key, tf, S, price, prev=None, ct=False):
         lines.append(f"⚠️ Дохио {S['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
     if ct:
         lines.append(CT_NOTE)
+    lines += lot_lines(pair_key, S['entry'], S['sl'])
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -1466,6 +1491,7 @@ def st_message(pair_key, tf, P, price, prev=None, ct=False, test=False, trend_ki
         lines.append("🧪 Туршилтын дохио: бодит үр дүнг 1 сар ажиглана. Мөнгө тавихгүйгээр дагаж үзээрэй.")
     if ct:
         lines.append(CT_NOTE)
+    lines += lot_lines(pair_key, P['entry'], P['sl'])
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -1504,6 +1530,7 @@ def dtc_message(pair_key, tf, S, price, ct=False):
         lines.append(f"⚠️ Дохио {S['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
     if ct:
         lines.append(CT_NOTE)
+    lines += lot_lines(pair_key, S['entry'], S['sl'])
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -1533,6 +1560,7 @@ def amd_message(pair_key, tf, P, price):
     ]
     if P["age"] >= AMD["fresh_bars"]:
         lines.append(f"⚠️ Дохио {P['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
+    lines += lot_lines(pair_key, P['entry'], P['sl'])
     lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
     return "\n".join(lines)
 
@@ -1686,6 +1714,7 @@ def main():
         return 1
 
     watch = [w for w in config.get("watch", []) if w.get("pair") in PAIRS and w.get("tf") in TF]
+    RISK["usd"] = float(config.get("risk_usd", 30) or 0)
 
     if not state.get("started"):
         names = ", ".join(f"{PAIRS[w['pair']]['name']} ({TF[w['tf']][4]})" for w in watch)
