@@ -259,9 +259,8 @@
     },
     "XAUUSD|5m": {
       "dir": -1,
-      "sent": true,
-      "status": "pending",
-      "time": 1793296500000
+      "status": "skip",
+      "time": 1793298600000
     }
   },
   "smc_announced": true,
