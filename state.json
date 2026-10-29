@@ -12,7 +12,19 @@
     "5371043257": "off"
   },
   "ct_announced": true,
-  "day": {},
+  "day": {
+    "vp|XAUUSD|1h": {
+      "cut": 1793306700000,
+      "dir": -1,
+      "entry": 4029.24,
+      "pair": "XAUUSD",
+      "px": "PAXGUSDT",
+      "sl": 4050.7321354017813,
+      "status": "open",
+      "tf": "1h",
+      "time": 1793264400000
+    }
+  },
   "day_announced": true,
   "dtc": {
     "XAUUSD|15m": {
@@ -134,8 +146,9 @@
     },
     "XAUUSD|1h": {
       "dir": -1,
-      "status": "tp",
-      "time": 1792429200000
+      "sent": true,
+      "status": "pending",
+      "time": 1793264400000
     }
   },
   "owner": "5371043257",
@@ -295,11 +308,12 @@
     },
     "XAUUSD|1h": {
       "dir": -1,
-      "entry": 4010.76,
-      "sl": 4027.275373040428,
-      "status": "sl",
-      "time": 1793088000000,
-      "tp": 3977.729253919145
+      "entry": 4029.24,
+      "sent": true,
+      "sl": 4050.7321354017813,
+      "status": "open",
+      "time": 1793264400000,
+      "tp": 3986.2557291964367
     }
   },
   "vp_announced": true,
