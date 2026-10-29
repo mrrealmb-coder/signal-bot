@@ -104,8 +104,10 @@ PAIRS = {
     # quiet: туршилтын хослол тул үнэ татаж чадахгүй бол Telegram-аар анхааруулахгүй (логт л бичнэ)
     "XAGUSD": {"name": "Мөнгө XAG/USD", "src": "yf", "sym": "SI=F", "tv": "OANDA:XAGUSD", "dec": 3, "td_every": 15,
                "quiet": True},
-    # Solana: Binance (24/7). Volume Profile-ийн үнийн алхам = үнийн 0.04%
-    "SOLUSD": {"name": "Solana SOL/USD", "src": "bn", "sym": "SOLUSDT", "tv": "BINANCE:SOLUSDT", "dec": 2},
+    # Solana: Binance (24/7). Volume Profile-ийн үнийн алхам тогтмол 0.04$ (туршилттай ижил) (үнээс хамаарч хөдөлбөл Value Area
+    # шалгалт бүрт бага зэрэг өөрчлөгдөж, нэг өдөрт хоёр дохио гарах алдаа гарсан)
+    "SOLUSD": {"name": "Solana SOL/USD", "src": "bn", "sym": "SOLUSDT", "tv": "BINANCE:SOLUSDT", "dec": 2,
+               "vp_step": 0.04},
     "ETHUSD": {"name": "ETH/USD", "src": "bn", "sym": "ETHUSDT", "td_alt": "ETH/USD", "tv": "BINANCE:ETHUSDT", "dec": 2},
 }
 
@@ -1406,7 +1408,7 @@ def main():
             cache[("vp_1h", sym)] = [b for b in raw if market_open(b["ct"] + 1 - step_ms)] if gold else raw
         pbars = cache[("vp_1h", sym)]
         daily = get_daily() if gold else get_daily_bn(sym)
-        vstep = None if gold else pbars[-1]["c"] * 0.0004
+        vstep = None if gold else PAIRS[w["pair"]].get("vp_step", 1.0)
         if len(pbars) < 100 or len(daily) < VP["sma"] + 5:
             raise DataError(f"VP: өгөгдөл хүрэлцэхгүй ({len(pbars)} цаг, {len(daily)} өдөр)")
         rec = state.setdefault(bucket, {}).get(key)
