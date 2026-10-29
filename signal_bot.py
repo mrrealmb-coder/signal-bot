@@ -196,7 +196,8 @@ def fetch_binance(sym, tf):
     for host in BN_HOSTS:
         try:
             rows = http_json(f"{host}/api/v3/klines?symbol={sym}&interval={TF[tf][1]}&limit=1000")
-            return [{"h": float(r[2]), "l": float(r[3]), "c": float(r[4]), "ct": int(r[6]), "v": float(r[5])} for r in rows]
+            return [{"h": float(r[2]), "l": float(r[3]), "c": float(r[4]), "ct": int(r[6]), "v": float(r[5]),
+                     "o": float(r[1])} for r in rows]
         except Exception as e:  # noqa: BLE001
             last_err = e
     raise DataError(f"Binance {sym}: {last_err}")
@@ -225,7 +226,8 @@ def fetch_twelve(sym, tf, key):
             s = v["datetime"]  # "2026-10-26 12:45:00" эсвэл өдрийн лаанд "2026-10-26"
             t = datetime.strptime(s, "%Y-%m-%d %H:%M:%S" if " " in s else "%Y-%m-%d").replace(tzinfo=timezone.utc)
             open_ms = int(t.timestamp() * 1000)
-            out.append({"h": float(v["high"]), "l": float(v["low"]), "c": float(v["close"]), "ct": open_ms + step_ms - 1})
+            out.append({"h": float(v["high"]), "l": float(v["low"]), "c": float(v["close"]), "ct": open_ms + step_ms - 1,
+                        "o": float(v["open"])})
         return out
     raise DataError(f"Twelve Data {sym}: лимит")
 
@@ -251,7 +253,8 @@ def fetch_yahoo(sym, tf):
         h, l, c = q["high"][i], q["low"][i], q["close"][i]
         if h is None or l is None or c is None or not h > l:
             continue
-        out.append({"h": h, "l": l, "c": c, "ct": t * 1000 + step - 1, "v": float(q["volume"][i] or 0)})
+        o = q["open"][i] if q.get("open") and q["open"][i] is not None else c
+        out.append({"h": h, "l": l, "c": c, "ct": t * 1000 + step - 1, "v": float(q["volume"][i] or 0), "o": o})
     return out
 
 
@@ -556,7 +559,7 @@ def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None):
     setup = {
         "dir": d, "kind": event["kind"], "time": bars[event["idx"]]["ct"] + 1,
         "level": event["level"], "level_time": bars[event["level_idx"]]["ct"] + 1,
-        "ob": (ob_lo, ob_hi), "ob_mid": tall, "fvg": fvg,
+        "ob": (ob_lo, ob_hi), "ob_mid": tall, "fvg": fvg, "ob_time": ob["ct"] + 1,
         "entry": entry, "sl": stop, "tp": target,
         "expires": bars[event["idx"]]["ct"] + 1 + SMC["valid_bars"] * step_ms,
         "status": "pending", "fill_time": None, "close_time": None,
@@ -1005,6 +1008,149 @@ def try_send(token, chat_id, text):
         return True
 
 
+def try_send_photo(token, chat_id, png, caption):
+    """Зурагтай мэдэгдэл (multipart). Тайлбар 1024 тэмдэгтээс урт бол зургийг богино тайлбартай, текстийг тусад нь."""
+    short = caption if len(caption) <= 1024 else caption.split("\n")[0]
+    boundary = "----signalbot" + str(int(time.time() * 1000))
+    parts = []
+    for k, v in (("chat_id", str(chat_id)), ("caption", short)):
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode())
+    parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="chart.png"\r\n'
+                 f"Content-Type: image/png\r\n\r\n".encode() + png + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendPhoto", data=b"".join(parts),
+                                 headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            res.read()
+    except urllib.error.HTTPError as e:
+        print("Зураг илгээж чадсангүй", chat_id, e.code)
+        return None if e.code == 400 else e.code != 403   # 400 → текстээр илгээнэ
+    except Exception as e:  # noqa: BLE001
+        print("Зураг илгээж чадсангүй", chat_id, e)
+        return None
+    if short != caption:
+        return try_send(token, chat_id, caption)
+    return True
+
+
+_PLT = None
+
+
+def _plt():
+    """matplotlib-ийг хэрэгтэй үед л ачаална (байхгүй бол нэг удаа суулгана)."""
+    global _PLT
+    if _PLT is None:
+        try:
+            import matplotlib
+        except ImportError:
+            import subprocess
+            subprocess.run([sys.executable, "-m", "pip", "install", "-q", "matplotlib"], timeout=180, check=False)
+            import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        _PLT = plt
+    return _PLT
+
+
+def render_chart(bars, step_ms, title, P, kind, extra=None, n_before=60, n_after=None):
+    """Дохионы жижиг график (PNG bytes). P: dir, time, entry, sl, tp (байхгүй байж болно).
+    kind: "st" (Supertrend шугам), "vp" (Value Area), "smc" (эвдэрсэн түвшин, OB, FVG), "dtc" (6 EMA тууз).
+    Алдаа гарвал None (тэгвэл зөвхөн текст илгээнэ)."""
+    try:
+        plt = _plt()
+        import io
+        extra = extra or {}
+        cts = [b["ct"] for b in bars]
+        si = next((i for i, b in enumerate(bars) if b["ct"] + 1 >= P["time"]), len(bars) - 1)
+        a0 = max(0, si - n_before)
+        if kind == "smc" and extra.get("level_time"):
+            li = next((i for i, b in enumerate(bars) if b["ct"] + 1 >= extra["level_time"]), si)
+            a0 = max(0, min(a0, li - 8))
+        if kind == "vp" and extra.get("day_start"):
+            di = next((i for i, b in enumerate(bars) if b["ct"] + 1 > extra["day_start"]), si)
+            a0 = max(0, min(a0, di - 24))
+        a1 = len(bars) if n_after is None else min(len(bars), si + 1 + n_after)
+        W = bars[a0:a1]
+        x = list(range(len(W)))
+        fig, ax = plt.subplots(figsize=(8, 4.4), dpi=110)
+        up_c, dn_c = "#26a69a", "#ef5350"
+        for i, b in enumerate(W):
+            o = b.get("o", W[i - 1]["c"] if i else b["c"])
+            col = up_c if b["c"] >= o else dn_c
+            ax.vlines(i, b["l"], b["h"], color=col, linewidth=0.8)
+            ax.add_patch(plt.Rectangle((i - 0.35, min(o, b["c"])), 0.7, max(abs(b["c"] - o), 1e-9),
+                                       color=col, linewidth=0))
+        s = si - a0
+        # аргын тусгай давхарга
+        if kind == "st" and extra.get("line"):
+            ln = extra["line"][a0:a1]
+            for d, colr in ((1, up_c), (-1, dn_c)):
+                ys = [v if (dd == d and v == v) else float("nan") for dd, v in ln]
+                ax.plot(x[:len(ys)], ys, color=colr, linewidth=1.4)
+        if kind == "dtc":
+            cl = [b["c"] for b in bars[:a1]]
+            for k, p in enumerate(DTC["emas"]):
+                e = ema(cl, p)[a0:a1]
+                ax.plot(x[:len(e)], e, color=plt.cm.viridis(k / 6), linewidth=0.9)
+        if kind == "vp" and extra.get("va"):
+            va = extra["va"]
+            di = next((i for i, b in enumerate(W) if b["ct"] + 1 > extra.get("day_start", 0)), 0)
+            ax.axhspan(va["val"], va["vah"], xmin=di / max(len(W), 1), color="#ffb300", alpha=0.15)
+            ax.axhline(va["poc"], color="#ff8f00", linewidth=0.8, linestyle=":")
+            ax.text(di, va["vah"], " Өмнөх өдрийн Value Area", fontsize=7, color="#e65100", va="bottom")
+        if kind == "smc":
+            if extra.get("level") is not None:
+                li = next((i for i, b in enumerate(W) if b["ct"] + 1 >= extra.get("level_time", 0)), 0)
+                ax.hlines(extra["level"], li, s, color="#555", linewidth=1, linestyle="--")
+                ax.text(s, extra["level"], f" {extra.get('label', 'BOS')}", fontsize=7, color="#333", va="bottom")
+            if extra.get("ob"):
+                oi = next((i for i, b in enumerate(W) if b["ct"] + 1 >= extra.get("ob_time", 0)), s)
+                ax.add_patch(plt.Rectangle((oi - 0.5, extra["ob"][0]), len(W) - oi, extra["ob"][1] - extra["ob"][0],
+                                           color="#7e57c2", alpha=0.18, linewidth=0))
+                ax.text(oi, extra["ob"][1], " Order Block", fontsize=7, color="#5e35b1", va="bottom")
+            if extra.get("fvg"):
+                ax.add_patch(plt.Rectangle((s - 3, extra["fvg"][0]), len(W) - s + 3, extra["fvg"][1] - extra["fvg"][0],
+                                           color="#29b6f6", alpha=0.15, linewidth=0))
+        # оролт / SL / TP
+        dec = extra.get("dec", 2)
+        for key, colr, name in (("entry", "#1e88e5", "Entry"), ("sl", "#e53935", "SL"), ("tp", "#43a047", "TP")):
+            v = P.get(key)
+            if v is None:
+                continue
+            ax.axhline(v, color=colr, linewidth=1.1, linestyle="-" if key == "entry" else "--")
+            ax.text(len(W) + 0.5, v, f"{name} {v:,.{dec}f}", color=colr, fontsize=8, va="center",
+                    ha="left", fontweight="bold", bbox=dict(facecolor="white", edgecolor="none", pad=1, alpha=0.9))
+        # дохионы лаа
+        sb = W[s]
+        d = P["dir"]
+        ax.axvline(s, color="#999", linewidth=0.7, linestyle=":")
+        rng = max(b["h"] for b in W) - min(b["l"] for b in W)
+        ax.annotate("BUY" if d == 1 else "SELL", xy=(s, sb["l"] if d == 1 else sb["h"]),
+                    xytext=(s - 2.5, (sb["l"] - rng * 0.10) if d == 1 else (sb["h"] + rng * 0.10)),
+                    ha="center", fontsize=8, fontweight="bold", color=up_c if d == 1 else dn_c,
+                    arrowprops=dict(arrowstyle="->", color=up_c if d == 1 else dn_c))
+        # тэнхлэг, цаг (Улаанбаатар)
+        ticks = list(range(0, len(W), max(1, len(W) // 7)))
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([datetime.fromtimestamp((W[i]["ct"] + 1) / 1000, UB).strftime("%m/%d\n%H:%M") for i in ticks],
+                           fontsize=7)
+        ax.tick_params(axis="y", labelsize=7)
+        ax.set_xlim(-1, len(W) + 10)
+        ax.grid(alpha=0.15)
+        ax.set_title(title, fontsize=10, loc="left")
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png")
+        plt.close(fig)
+        return buf.getvalue()
+    except Exception as e:  # noqa: BLE001
+        print("График зурж чадсангүй:", e)
+        return None
+
+
 def fmt_p(x, dec):
     return f"{x:,.{dec}f}"
 
@@ -1386,7 +1532,7 @@ def main():
 
     roles = state.setdefault("chat_roles", {})
 
-    def send(text, kind="all", swing_text=None):
+    def send(text, kind="all", swing_text=None, photo=None):
         """kind: "all" = бүх чат, "swing" = Day чатад илгээхгүй, "day" = Swing чатад илгээхгүй.
         Чатын үүрэг (эзэмшигч группт /swing, /day, /all, /off гэж тохируулна): тохируулаагүй чат бүгдийг авна.
         swing_text: Swing чатад өөр (📅 мөргүй) хувилбар илгээх бол."""
@@ -1394,7 +1540,11 @@ def main():
             role = roles.get(cid)
             if role == "off" or (role == "day" and kind == "swing") or (role == "swing" and kind == "day"):
                 continue
-            if not try_send(token, cid, swing_text if (role == "swing" and swing_text) else text):
+            t = swing_text if (role == "swing" and swing_text) else text
+            ok = try_send_photo(token, cid, photo, t) if photo else None
+            if ok is None:
+                ok = try_send(token, cid, t)
+            if not ok:
                 chats.remove(cid)  # ботыг блоклосон эсвэл группээс хасагдсан
                 print("Хүлээн авагч хасагдлаа:", cid)
 
@@ -1487,12 +1637,15 @@ def main():
         d = days.get(f"{m}|{key}")
         return "all" if d and d["time"] == t and d["status"] in ("open", "pending") else "swing"
 
-    def send_signal(msg, dmsg):
+    def send_signal(msg, dmsg, photo=None):
         """Шинэ дохио: day-д тохирвол хоёр чатад (Swing чатад 📅 мөргүй), үгүй бол зөвхөн Swing чатад."""
         if dmsg != msg:
-            send(dmsg, "all", swing_text=msg)
+            send(dmsg, "all", swing_text=msg, photo=photo)
         else:
-            send(msg, "swing")
+            send(msg, "swing", photo=photo)
+
+    def chart_title(w, method, d):
+        return f"{PAIRS[w['pair']]['name']} · {TF[w['tf']][4]} · {method} {'BUY' if d == 1 else 'SELL'}"
 
     def day_result(m, key, t, r):
         """Үндсэн позиц хаалтаас өмнө хаагдвал day-ийн үр дүн ижил."""
@@ -1590,7 +1743,11 @@ def main():
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
                 msg = smc_message(w["pair"], w["tf"], S, price, cancel_prev)
                 dmsg = msg if ct else day_msg(w, bucket, key, msg, S, limit=S["status"] == "pending")
-                send_signal(msg, dmsg)
+                png = render_chart([b for b in bars if b["ct"] < now_ms], step_ms, chart_title(w, "SMC " + S["kind"], S["dir"]),
+                                   S, "smc", {"level": S["level"], "level_time": S["level_time"], "ob": S["ob"],
+                                              "ob_time": S.get("ob_time"), "fvg": S["fvg"], "label": S["kind"],
+                                              "dec": PAIRS[w["pair"]]["dec"]}, n_before=50)
+                send_signal(msg, dmsg, png)
                 print(f"  → {label} санаа илгээлээ")
                 state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"], "sent": True}
                 return
@@ -1653,7 +1810,12 @@ def main():
                     send(prev, prev_kind)
                     print(f"  → {label} позиц хаагдлаа")
                 msg = vp_message(w["pair"], w["tf"], S, price, None, ct)
-                send_signal(msg, msg if ct else day_msg(w, bucket, key, msg, S))
+                closed = [b for b in pbars if b["ct"] < now_ms]
+                sk = next((day_key(b, step_ms) for b in closed if b["ct"] + 1 >= S["time"]), None)
+                ds = next((b["ct"] + 1 - step_ms for b in closed if day_key(b, step_ms) == sk), S["time"])
+                png = render_chart(closed, step_ms, chart_title(w, "Volume Profile", S["dir"]), S, "vp",
+                                   {"va": S["va"], "day_start": ds, "dec": PAIRS[w["pair"]]["dec"]}, n_before=30)
+                send_signal(msg, msg if ct else day_msg(w, bucket, key, msg, S), png)
                 print(f"  → {label} дохио илгээлээ")
                 prev, sent = None, True
             state[bucket][key] = {"time": S["time"], "dir": S["dir"], "entry": S["entry"], "sl": S["sl"],
@@ -1699,7 +1861,10 @@ def main():
                     send(prev, prev_kind)
                     print(f"  → {label} позиц хаагдлаа")
                 msg = st_message(w["pair"], w["tf"], P, price, None, ct, bool(w.get("test")), kind)
-                send_signal(msg, msg if ct else day_msg(w, bucket, key, msg, P))
+                closed = [b for b in bars if b["ct"] < now_ms]
+                png = render_chart(closed, TF[w["tf"]][0] * 1000, chart_title(w, "Supertrend", P["dir"]), P, "st",
+                                   {"line": supertrend(closed), "dec": PAIRS[w["pair"]]["dec"]}, n_before=60)
+                send_signal(msg, msg if ct else day_msg(w, bucket, key, msg, P), png)
                 print(f"  → {label} дохио илгээлээ")
                 prev = None
                 P["sent"] = True
@@ -1728,7 +1893,10 @@ def main():
             if not rec and (S["age"] >= DTC["fresh_bars"] or now_ms - S["time"] > DTC["fresh_bars"] * TF[w["tf"]][0] * 1000):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif S["status"] == "open":
-                send(dtc_message(w["pair"], w["tf"], S, price, ct), "swing")
+                closed = [b for b in bars if b["ct"] < now_ms]
+                png = render_chart(closed, TF[w["tf"]][0] * 1000, chart_title(w, "DTC", S["dir"]), S, "dtc",
+                                   {"dec": PAIRS[w["pair"]]["dec"]}, n_before=60)
+                send(dtc_message(w["pair"], w["tf"], S, price, ct), "swing", photo=png)
                 print(f"  → {label} дохио илгээлээ")
                 S["sent"] = True
             state[bucket][key] = {k: S.get(k) for k in ("time", "dir", "entry", "sl", "tp", "status", "sent")}
