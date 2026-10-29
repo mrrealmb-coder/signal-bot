@@ -78,6 +78,22 @@ H4_EMA = 50
 # өмнө) хүртэл хаагдаагүй бол «📅 Day хаах» мэдэгдэл илгээнэ. Үр дүнг "_d" нэрээр тусад нь тоолно.
 DAY = {"open_srv": 1.05, "last_entry_srv": 23.0, "close_srv": 23.75}
 
+# ⚡ Scalp · AMD (Consolidation → Manipulation → Distribution, ICT Power of 3) — алт, 5 минут, 🧪 туршилт.
+# KhulegScalp чатад (/scalp үүрэгтэй) л илгээнэ. Нью-Йоркийн цагаар:
+#   1) Consolidation: 02:00–07:00-ийн 5 минутын лаануудын дээд/доод цэг (хүрээ)
+#   2) Manipulation: 07:00–11:00-д үнэ хүрээний нэг талыг цоолоод (sweep) 5 минутын лаа буцаж хүрээн дотор хаагдвал
+#   3) Эсрэг тийш Market, зөвхөн 200 өдрийн чигийн дагуу. SL = цоолсон оргил + 0.1 ATR, TP = хүрээний дунд (≤ 2R).
+#   Өдөрт ганц (эхний) боломж. 6 цагт эсвэл IC-ийн өдрийн хаалтад (аль түрүүлэх) хүрэхгүй бол хаана.
+# 2.4 жилийн PAXG 5 минутын туршилт (IC Raw ~0.28$/унц зардлаар): +41R / 183 арилжаа, ялалт 50%, 6 хагас жил бүгдэд
+# ашигтай, зардал 2 дахин бол +28R. 200 өдрийн чигийн эсрэг талын дохио −33R. Позиц медиан 20 минут барина.
+AMD = {"rng": (2, 7), "man": (7, 11), "sl_buf_atr": 0.1, "max_r_atr": 6.0, "min_tp_r": 0.5, "tp_cap_r": 2.0,
+       "hold": 72, "fresh_bars": 2}
+
+
+def ny_time(t_ms):
+    from zoneinfo import ZoneInfo
+    return datetime.fromtimestamp(t_ms / 1000, ZoneInfo("America/New_York"))
+
 
 def srv_offset_ms(t_ms):
     """IC Markets серверийн цагийн UTC-ээс зөрүү: Нью-Йорк + 7 цаг (GMT+2 өвөл / GMT+3 зун)."""
@@ -768,6 +784,73 @@ def st_outcome(bars, st, P, now_ms):
     return {}
 
 
+# ---------------------------------------------------------------- ⚡ Scalp · AMD
+
+def amd_signal(bars, daily, now_ms, step_ms=300000):
+    """Хаагдсан 5 минутын лаан дээрх хамгийн сүүлийн AMD дохио (200 өдрийн чигийн дагуу) эсвэл None."""
+    closed = [b for b in bars if b["ct"] < now_ms]
+    if len(closed) < 100:
+        return None
+    a = atr(closed, 14)
+    trend = sma_trend_fn(daily)
+    ny = [ny_time(b["ct"] + 1 - step_ms) for b in closed]
+    hrs = [t.hour + t.minute / 60 for t in ny]
+    (r0, r1), (m0, m1) = AMD["rng"], AMD["man"]
+    best = None
+    for D in sorted({t.date() for t in ny}):
+        R = [i for i in range(len(closed)) if ny[i].date() == D and r0 <= hrs[i] < r1]
+        M = [i for i in range(len(closed)) if ny[i].date() == D and m0 <= hrs[i] < m1]
+        if len(R) < (r1 - r0) * 12 * 0.8 or not M:
+            continue
+        hi, lo = max(closed[i]["h"] for i in R), min(closed[i]["l"] for i in R)
+        side, ext, ext_t = 0, None, None
+        for k in M:
+            b = closed[k]
+            if side == 0:
+                if b["h"] > hi:
+                    side, ext, ext_t = 1, b["h"], b["ct"] + 1
+                elif b["l"] < lo:
+                    side, ext, ext_t = -1, b["l"], b["ct"] + 1
+            if not side:
+                continue
+            if (b["h"] > ext) if side == 1 else (b["l"] < ext):
+                ext, ext_t = (b["h"] if side == 1 else b["l"]), b["ct"] + 1
+            if (b["c"] - (hi if side == 1 else lo)) * side >= 0:
+                continue
+            # буцаж хүрээнд хаагдлаа → эсрэг тийш (өдрийн эхний боломж, шүүлтүүрт тэнцэхгүй бол тэр өдөр алгасна)
+            d, e, at = -side, b["c"], a[k]
+            sl = ext + side * AMD["sl_buf_atr"] * at
+            risk, mid = abs(sl - e), (hi + lo) / 2
+            if (not math.isnan(at) and 0 < risk <= AMD["max_r_atr"] * at and (mid - e) * d > AMD["min_tp_r"] * risk
+                    and trend(b["ct"] + 1) == d):
+                t = b["ct"] + 1
+                cut = day_cut(t)
+                best = {"dir": d, "time": t, "entry": e, "sl": sl, "tp": e + d * min(abs(mid - e), AMD["tp_cap_r"] * risk),
+                        "hi": hi, "lo": lo, "ext": ext, "ext_time": ext_t,
+                        "r_start": closed[R[0]]["ct"] + 1 - step_ms, "r_end": closed[R[-1]]["ct"] + 1,
+                        "limit_time": min(t + AMD["hold"] * step_ms, cut or 10 ** 15),
+                        "age": len(closed) - 1 - k, "status": "open"}
+            break
+    return best
+
+
+def amd_outcome(bars, P, now_ms):
+    """Оролтын дараа: SL, TP (одоогийн хаагдаагүй лааг оруулан), эсвэл хугацаа/өдрийн хаалт."""
+    d = P["dir"]
+    for b in bars:
+        if b["ct"] + 1 <= P["time"]:
+            continue
+        if (b["l"] <= P["sl"]) if d == 1 else (b["h"] >= P["sl"]):
+            return {"status": "sl", "close_time": min(b["ct"], now_ms), "exit": P["sl"]}
+        if (b["h"] >= P["tp"]) if d == 1 else (b["l"] <= P["tp"]):
+            return {"status": "tp", "close_time": min(b["ct"], now_ms), "exit": P["tp"]}
+        if b["ct"] >= now_ms:
+            break
+        if b["ct"] + 1 >= P["limit_time"]:
+            return {"status": "time", "close_time": b["ct"] + 1, "exit": b["c"]}
+    return {}
+
+
 # ---------------------------------------------------------------- 🧪 DTC
 
 def dtc_signal(bars, daily, now_ms, side=1):
@@ -841,8 +924,15 @@ def chat_name(chat):
 ROLE_TEXT = {
     "/swing": "✅ Энэ чат: 📈 Swing. Бүх дохио ирнэ (📅 Day мөр, «Day хаах» мэдэгдэлгүй).",
     "/day": "✅ Энэ чат: 📅 Day арилжаа. Зөвхөн алтны day дохио, тэдгээрийн хаах мэдэгдэл ирнэ.",
+    "/scalp": ("✅ Энэ чат: ⚡ Scalp. Зөвхөн алтны 5 минутын 🧪 AMD скальп дохио, түүний хаах мэдэгдэл ирнэ.\n"
+               "Дүрэм (Нью-Йоркийн цагаар): 02:00–07:00-ийн хүрээ (Consolidation) → 07:00–11:00-д нэг талыг нь "
+               "цоолоод буцаж хүрээнд хаагдвал (Manipulation) эсрэг тийш орно, зөвхөн 200 өдрийн чигийн дагуу. "
+               "SL цоолсон оргилын цаана, TP хүрээний дунд (≤ 2R).\n"
+               "Монголын цагаар хүрээ 14:00–19:00, дохио 19:00–23:00 хооронд (11/2-ноос 1 цаг хойшилно), "
+               "долоо хоногт ~1–2 удаа ирнэ. "
+               "Позиц ихэвчлэн 20–45 минутад хаагдана."),
     "/all": "✅ Энэ чат бүх дохиог (Swing + Day) авна.",
-    "/off": "🔕 Энэ чатад дохио илгээхгүй. Дахин авах бол /all, /swing эсвэл /day гэж бичнэ үү.",
+    "/off": "🔕 Энэ чатад дохио илгээхгүй. Дахин авах бол /all, /swing, /day эсвэл /scalp гэж бичнэ үү.",
 }
 
 
@@ -1070,6 +1160,9 @@ def render_chart(bars, step_ms, title, P, kind, extra=None, n_before=60, n_after
         if kind == "vp" and extra.get("day_start"):
             di = next((i for i, b in enumerate(bars) if b["ct"] + 1 > extra["day_start"]), si)
             a0 = max(0, min(a0, di - 24))
+        if kind == "amd" and extra.get("r_start"):
+            ri = next((i for i, b in enumerate(bars) if b["ct"] + 1 > extra["r_start"]), si)
+            a0 = max(0, min(a0, ri - 6))
         a1 = len(bars) if n_after is None else min(len(bars), si + 1 + n_after)
         W = bars[a0:a1]
         x = list(range(len(W)))
@@ -1112,6 +1205,19 @@ def render_chart(bars, step_ms, title, P, kind, extra=None, n_before=60, n_after
             if extra.get("fvg"):
                 ax.add_patch(plt.Rectangle((s - 3, extra["fvg"][0]), len(W) - s + 3, extra["fvg"][1] - extra["fvg"][0],
                                            color="#29b6f6", alpha=0.15, linewidth=0))
+        if kind == "amd" and extra.get("r_start"):
+            hi, lo = extra["hi"], extra["lo"]
+            r0i = next((i for i, b in enumerate(W) if b["ct"] + 1 > extra["r_start"]), 0)
+            r1i = next((i for i, b in enumerate(W) if b["ct"] + 1 > extra["r_end"]), s)
+            ax.add_patch(plt.Rectangle((r0i - 0.5, lo), r1i - r0i, hi - lo, color="#ffb300", alpha=0.18, linewidth=0))
+            ax.hlines([hi, lo], r0i - 0.5, len(W), colors="#e65100", linewidth=0.8, linestyles=":")
+            ax.hlines((hi + lo) / 2, r1i, len(W), colors="#ff8f00", linewidth=0.7, linestyles="--")
+            ax.text(r1i + 1, (hi + lo) / 2, "хүрээний дунд", fontsize=6.5, color="#ef6c00", va="bottom")
+            ax.text(r0i, hi, " Consolidation", fontsize=7, color="#e65100", va="bottom")
+            ei = next((i for i, b in enumerate(W) if b["ct"] + 1 >= extra.get("ext_time", 0)), s)
+            ax.scatter([ei], [extra["ext"]], marker="x", color="#6a1b9a", s=30, zorder=5)
+            ax.text(ei - 1, extra["ext"], "Manipulation ", fontsize=7, color="#6a1b9a", ha="right",
+                    va="center")
         # оролт / SL / TP
         dec = extra.get("dec", 2)
         for key, colr, name in (("entry", "#1e88e5", "Entry"), ("sl", "#e53935", "SL"), ("tp", "#43a047", "TP")):
@@ -1396,6 +1502,47 @@ def dtc_message(pair_key, tf, S, price, ct=False):
     return "\n".join(lines)
 
 
+def amd_message(pair_key, tf, P, price):
+    dec, d = PAIRS[pair_key]["dec"], P["dir"]
+    risk = abs(P["entry"] - P["sl"])
+    rr = abs(P["tp"] - P["entry"]) / risk
+    swept = "дээд" if d == -1 else "доод"
+    lines = [
+        f"⚡ Scalp · AMD · {'🟢 BUY' if d == 1 else '🔴 SELL'}",
+        f"{PAIRS[pair_key]['name']} · {TF[tf][4]}",
+        f"Consolidation ({fmt_time(P['r_start'])[-5:]}–{fmt_time(P['r_end'])[-5:]}): "
+        f"{fmt_p(P['lo'], dec)} – {fmt_p(P['hi'], dec)}",
+        f"Manipulation: хүрээний {swept} талыг {fmt_p(P['ext'], dec)} хүртэл цоолоод буцаж хүрээнд хаагдлаа · "
+        f"{fmt_time(P['time'])}",
+        trend_line(d),
+        "",
+        f"Оролт (Market): {fmt_p(P['entry'], dec)}",
+        f"SL: {fmt_p(P['sl'], dec)}  ({'−' if d == 1 else '+'}{fmt_p(risk, dec)})",
+        f"TP: {fmt_p(P['tp'], dec)}  ({'+' if d == 1 else '−'}{fmt_p(abs(P['tp'] - P['entry']), dec)} · {rr:.1f}R)"
+        + (" — хүрээний дунд" if rr < AMD["tp_cap_r"] - 1e-6 else ""),
+        f"Хугацаа: TP/SL-д хүрэхгүй бол {fmt_time(P['limit_time'])[-5:]}-д хаана.",
+        f"Одоогийн үнэ: {fmt_p(price, dec)}",
+        "ℹ️ Үнэ Binance XAUT-аас тул брокерын үнээс бага зэрэг зөрнө. SL/TP-г хаалтанд буй зайгаар тавина уу.",
+        "🧪 Туршилтын скальп: 2.4 жилийн туршилтаар +41R / 183 арилжаа (ялалт 50%). 1–2 сар мөнгө тавихгүйгээр ажиглана.",
+    ]
+    if P["age"] >= AMD["fresh_bars"]:
+        lines.append(f"⚠️ Дохио {P['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
+    lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
+    return "\n".join(lines)
+
+
+def amd_close_text(pair_key, tf, rec, out, r):
+    dec = PAIRS[pair_key]["dec"]
+    h = head(pair_key, tf, rec["dir"])
+    t = fmt_time(out["close_time"])[-5:]
+    if out["status"] == "tp":
+        return f"⚡ 🎯 Scalp TP хүрсэн · {h}\nTP {fmt_p(out['exit'], dec)} ({t}). Ашиг ≈ {r:+.1f}R"
+    if out["status"] == "sl":
+        return f"⚡ 🛑 Scalp SL цохисон · {h}\nSL {fmt_p(out['exit'], dec)} ({t}). Алдагдал ≈ −1R"
+    return (f"⚡ ⌛ Scalp хугацаа дууслаа · {h}\nTP/SL-д хүрсэнгүй. {fmt_p(out['exit'], dec)} орчимд хаана уу ({t}). "
+            f"Үр дүн ≈ {r:+.1f}R")
+
+
 def dtc_close_text(pair_key, tf, rec, out):
     dec = PAIRS[pair_key]["dec"]
     h = head(pair_key, tf, rec["dir"])
@@ -1413,8 +1560,8 @@ def dtc_close_text(pair_key, tf, rec, out):
 METHOD_NAMES = {"ema": "📊 EMA", "smc": "🧠 SMC", "vp": "📦 VP", "st": "📈 Supertrend", "dtc": "🧪 DTC",
                 "smc_ct": "⚠️ SMC эсрэг", "vp_ct": "⚠️ VP эсрэг", "st_ct": "⚠️ Supertrend эсрэг",
                 "dtc_ct": "⚠️ DTC эсрэг", "st_t": "🧪 Supertrend", "smc_t": "🧪 SMC",
-                "smc_d": "📅 SMC day", "vp_d": "📅 VP day", "st_d": "📅 Supertrend day"}
-# "_t" төгсгөлтэй арга = 🧪 туршилтын хослол (config-д "test": true). Тайланд тусад нь тоолно.
+                "smc_d": "📅 SMC day", "vp_d": "📅 VP day", "st_d": "📅 Supertrend day", "amd_s": "⚡ AMD scalp"}
+# "_t" төгсгөлтэй арга = 🧪 туршилтын хослол (config-д "test": true), "_s" = ⚡ Scalp. Тайланд тусад нь тоолно.
 
 
 def ct_tag(msg, ct):
@@ -1449,7 +1596,9 @@ def report_text(state, now_ms, days=7):
     is_ct = lambda x: "_ct" in x["m"]  # noqa: E731
     is_t = lambda x: x["m"].endswith("_t") and not is_ct(x)  # noqa: E731
     is_d = lambda x: x["m"].endswith("_d")  # noqa: E731
-    main_led = [x for x in led if not is_ct(x) and not is_t(x) and not is_d(x)]
+    is_s = lambda x: x["m"].endswith("_s")  # noqa: E731
+    main_led = [x for x in led if not is_ct(x) and not is_t(x) and not is_d(x) and not is_s(x)]
+    s_led = [x for x in led if is_s(x)]
     ct_led = [x for x in led if is_ct(x)]
     t_led = [x for x in led if is_t(x)]
     d_led = [x for x in led if is_d(x)]
@@ -1485,6 +1634,13 @@ def report_text(state, now_ms, days=7):
                 f"Сүүлийн {days} хоног: " + (f"{twt:+.1f}R" if tw else "хаагдсан арилжаа алга")]
         out += tw
         out += [f"Эхэлснээс хойш: {tat:+.1f}R"]
+    if s_led:
+        sw, swt = block([x for x in s_led if x["t"] >= since])
+        _, sat = block(s_led)
+        out += ["", "⚡ Scalp (KhulegScalp, туршилт, дээрх дүнд ороогүй)",
+                f"Сүүлийн {days} хоног: " + (f"{swt:+.1f}R" if sw else "хаагдсан арилжаа алга")]
+        out += sw
+        out += [f"Эхэлснээс хойш: {sat:+.1f}R"]
     out += ["", "R = нэг арилжааны эрсдэл. Спред, шимтгэлийг тооцоогүй. Limit биелээгүй дохиог тоолоогүй."]
     return "\n".join(out)
 
@@ -1533,12 +1689,15 @@ def main():
     roles = state.setdefault("chat_roles", {})
 
     def send(text, kind="all", swing_text=None, photo=None):
-        """kind: "all" = бүх чат, "swing" = Day чатад илгээхгүй, "day" = Swing чатад илгээхгүй.
-        Чатын үүрэг (эзэмшигч группт /swing, /day, /all, /off гэж тохируулна): тохируулаагүй чат бүгдийг авна.
-        swing_text: Swing чатад өөр (📅 мөргүй) хувилбар илгээх бол."""
+        """kind: "all" = бүх чат, "swing" = Day чатад илгээхгүй, "day" = Swing чатад илгээхгүй,
+        "scalp" = зөвхөн ⚡ Scalp чатад (Scalp чат өөр юу ч авахгүй; 7 хоногийн тайланг тусад нь илгээнэ).
+        Чатын үүрэг (эзэмшигч группт /swing, /day, /scalp, /all, /off гэж тохируулна): тохируулаагүй чат scalp-аас
+        бусдыг авна. swing_text: Swing чатад өөр (📅 мөргүй) хувилбар илгээх бол."""
         for cid in list(chats):
             role = roles.get(cid)
             if role == "off" or (role == "day" and kind == "swing") or (role == "swing" and kind == "day"):
+                continue
+            if (kind == "scalp") != (role == "scalp"):
                 continue
             t = swing_text if (role == "swing" and swing_text) else text
             ok = try_send_photo(token, cid, photo, t) if photo else None
@@ -1873,6 +2032,40 @@ def main():
             send(prev, prev_kind)
             print(f"  → {label} позиц хаагдлаа")
 
+    def track_amd(key, w, bars, now_ms):
+        step_ms = TF[w["tf"]][0] * 1000
+        daily = get_daily()
+        if len(daily) < VP["sma"] + 5:
+            raise DataError(f"{key}: өдрийн өгөгдөл хүрэлцэхгүй ({len(daily)})")
+        scal = state.setdefault("scalp", {})
+        rec = scal.get(key)
+        price = bars[-1]["c"]
+        if rec and rec.get("status") == "open":
+            out = amd_outcome(bars, rec, now_ms)
+            if out:
+                r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
+                if rec.get("sent"):
+                    send(amd_close_text(w["pair"], w["tf"], rec, out, r), "scalp")
+                    record(state, "amd_s", key, r)
+                rec["status"] = out["status"]
+                print(f"  → AMD scalp позиц хаагдлаа ({out['status']}, {r:+.2f}R)")
+        P = amd_signal(bars, daily, now_ms, step_ms)
+        print(f"{key}: AMD scalp {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) if P else 'дохио алга'}")
+        if P and (not rec or rec.get("time") != P["time"]) and not (rec and rec.get("status") == "open"):
+            P.update(amd_outcome(bars, P, now_ms))
+            P["sent"] = False
+            if P["age"] > AMD["fresh_bars"] or P["status"] != "open":
+                print("  (хуучин эсвэл аль хэдийн хаагдсан тул илгээхгүй, зөвхөн тэмдэглэв)")
+            else:
+                closed = [b for b in bars if b["ct"] < now_ms]
+                png = render_chart(closed, step_ms, chart_title(w, "AMD scalp", P["dir"]), P, "amd",
+                                   {k: P[k] for k in ("hi", "lo", "ext", "ext_time", "r_start", "r_end")}
+                                   | {"dec": PAIRS[w["pair"]]["dec"]}, n_before=20)
+                send(amd_message(w["pair"], w["tf"], P, price), "scalp", photo=png)
+                P["sent"] = True
+                print("  → AMD scalp дохио илгээлээ")
+            scal[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "limit_time", "status", "sent")}
+
     def track_dtc(key, w, bars, now_ms, ct=False):
         bucket = "dtc_ct" if ct else "dtc"
         label = "DTC эсрэг" if ct else "DTC"
@@ -1996,6 +2189,11 @@ def main():
                 track_ema(key, w, bars, analyze(bars, now_ms), now_ms, step_ms)
             else:
                 print(f"{key}: EMA-д лаа хүрэлцэхгүй ({len(bars)})")
+        if w.get("amd"):
+            try:
+                track_amd(key, w, bars, now_ms)
+            except Exception as e:  # noqa: BLE001
+                print("AMD АЛДАА", key, e)
         ct_on = bool(config.get("counter_trend")) and w.get("ct", True)
         sides = (False, True) if ct_on else (False,)
         for ct in sides:
@@ -2043,7 +2241,9 @@ def main():
     ub_now = datetime.now(UB)
     week_tag = ub_now.strftime("%G-W%V")
     if ub_now.weekday() == 0 and ub_now.hour >= 9 and state.get("report_week") != week_tag:
-        send(report_text(state, now_ms))
+        rep = report_text(state, now_ms)
+        send(rep)
+        send(rep, "scalp")
         state["report_week"] = week_tag
         print("  → 7 хоногийн тайлан илгээлээ")
 
