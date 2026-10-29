@@ -38,7 +38,7 @@
       "pair": "XAUUSD",
       "px": null,
       "sl": 4024.910989876732,
-      "status": "pending",
+      "status": "cancel",
       "tf": "5m",
       "time": 1793296500000
     },
@@ -52,7 +52,7 @@
       "pair": "XAUUSD",
       "px": null,
       "sl": 4069.2746282395647,
-      "status": "open",
+      "status": "done",
       "tf": "1h",
       "time": 1793275200000
     },
@@ -63,7 +63,7 @@
       "pair": "XAUUSD",
       "px": "PAXGUSDT",
       "sl": 4050.7321354017813,
-      "status": "open",
+      "status": "done",
       "tf": "1h",
       "time": 1793264400000
     }
@@ -183,6 +183,18 @@
       "m": "smc_d",
       "r": -1.0,
       "t": 1793304370434
+    },
+    {
+      "k": "XAUUSD|1h",
+      "m": "st_d",
+      "r": -0.03,
+      "t": 1793306721099
+    },
+    {
+      "k": "XAUUSD|1h",
+      "m": "vp_d",
+      "r": 0.15,
+      "t": 1793306721539
     }
   ],
   "ledger_start": 1793195530901,
