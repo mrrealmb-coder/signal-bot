@@ -67,6 +67,10 @@ VP = {"sym": "PAXGUSDT", "step": 1.0, "va": 0.70, "need": 2, "sl_atr": 1.5, "tp_
 #   Чиг эргэх лаа хаагдахад, зөвхөн 200 өдрийн SMA-ийн чиглэлд орно. SL = тэр үеийн Supertrend шугам.
 #   Supertrend эсрэг эргэхэд (аль ч чиглэлд) гарна. 240 лаанаас удаан бол хаана.
 ST = {"atr": 10, "factor": 3.0, "hold": 240, "fresh_bars": 2}
+# 🧪 config-д "st_trend": "4h_ema50" гэвэл 200 өдрийн оронд 4 цагийн чигийг ашиглана: хамгийн сүүлд хаагдсан
+# 4 цагийн лааны хаалт EMA50-аас дээр бол зөвхөн BUY, доор бол зөвхөн SELL. BTC/ETH-ийн 15 минутад 2.5 жилд
+# 200 өдрийн шүүлтүүрээс илүү гарсан (BTC +72R 6/6 үе, ETH +104R 5/6), гэхдээ спред/шимтгэлд маш мэдрэмтгий.
+H4_EMA = 50
 
 # 🧪 DTC (DTC Trading Club индикаторын нийтэлсэн тайлбараар хуулбарласан) — туршилтын дохио.
 #   EMA 30/35/40/45/50/60 бүгд дарааллаар жагсахад (саармаг/эсрэгээс) орно.
@@ -83,9 +87,10 @@ CT_NOTE = ("⚠️ 200 өдрийн чигийн эсрэг дохио. 3 жил
            "(ялалт ~30%). Мөнгө тавихгүйгээр ажиглана уу.")
 
 
-def trend_line(d, ct=False):
+def trend_line(d, ct=False, kind="sma"):
     t = -d if ct else d
-    return f"200 өдрийн чиг: {'өсөх ↑' if t == 1 else 'буурах ↓'}" + (" · дохио ЭСРЭГ чиглэлд" if ct else "")
+    name = f"4 цагийн чиг (EMA{H4_EMA})" if kind == "4h_ema50" else "200 өдрийн чиг"
+    return f"{name}: {'өсөх ↑' if t == 1 else 'буурах ↓'}" + (" · дохио ЭСРЭГ чиглэлд" if ct else "")
 
 # src: "bn" = Binance (түлхүүргүй), "td" = Twelve Data. td_alt = Binance ажиллахгүй үед нөөц.
 PAIRS = {
@@ -109,6 +114,10 @@ PAIRS = {
     "SOLUSD": {"name": "Solana SOL/USD", "src": "bn", "sym": "SOLUSDT", "tv": "BINANCE:SOLUSDT", "dec": 2,
                "vp_step": 0.04},
     "ETHUSD": {"name": "ETH/USD", "src": "bn", "sym": "ETHUSDT", "td_alt": "ETH/USD", "tv": "BINANCE:ETHUSDT", "dec": 2},
+    "BTCUSD": {"name": "Bitcoin BTC/USD", "src": "bn", "sym": "BTCUSDT", "tv": "BINANCE:BTCUSDT", "dec": 2},
+    # USD/CAD: Yahoo (CAD=X), Twelve Data-ийн лимит хэрэглэхгүй. 🧪 туршилт тул алдааг Telegram-аар мэдэгдэхгүй.
+    "USDCAD": {"name": "USD/CAD", "src": "yf", "sym": "CAD=X", "tv": "OANDA:USDCAD", "dec": 5, "td_every": 5,
+               "quiet": True},
 }
 
 # (секунд, Binance, Twelve Data, TradingView, монгол нэр)
@@ -669,11 +678,25 @@ def supertrend(bars):
     return out
 
 
-def st_signal(bars, daily, now_ms, side=1):
-    """200 өдрийн чигийн дагуух (side=-1 бол эсрэг) хамгийн сүүлийн Supertrend эргэлт ба түүний одоогийн төлөв."""
+def ema_trend_fn(htf_bars, now_ms, n=H4_EMA):
+    """t мөчөөс өмнө хаагдсан сүүлийн том лааны хаалтыг EMA(n)-тай харьцуулна: +1 дээр, -1 доор, 0 мэдээлэл дутуу."""
+    closed = [b for b in htf_bars if b["ct"] < now_ms]
+    e = ema([b["c"] for b in closed], n)
+    cts = [b["ct"] for b in closed]
+    sig = [0 if math.isnan(e[i]) else (1 if b["c"] > e[i] else -1) for i, b in enumerate(closed)]
+
+    def f(t):
+        k = bisect.bisect_left(cts, t) - 1
+        return sig[k] if k >= 0 else 0
+    return f
+
+
+def st_signal(bars, daily, now_ms, side=1, trend=None):
+    """200 өдрийн чигийн дагуух (side=-1 бол эсрэг) хамгийн сүүлийн Supertrend эргэлт ба түүний одоогийн төлөв.
+    trend өгвөл 200 өдрийн оронд түүгээр шүүнэ (жишээ нь 4 цагийн EMA50)."""
     closed = [b for b in bars if b["ct"] < now_ms]
     st = supertrend(closed)
-    trend = sma_trend_fn(daily)
+    trend = trend or sma_trend_fn(daily)
     for i in range(len(st) - 1, 30, -1):
         d = st[i][0]
         if d and st[i - 1][0] and d != st[i - 1][0] and trend(closed[i]["ct"] + 1) == d * side:
@@ -1023,6 +1046,8 @@ def smc_message(pair_key, tf, S, price, cancel_prev=None):
         lines.append(f"⚠️ Үнэ {fmt_time(S['fill_time'])[-5:]}-д оролтод аль хэдийн хүрсэн.")
     if cancel_prev:
         lines.append(f"↩️ Өмнөх SMC {cancel_prev} санааны захиалгаа цуцална уу.")
+    if S.get("test"):
+        lines.append("🧪 Туршилтын санаа: бодит үр дүнг 1 сар ажиглана. Мөнгө тавихгүйгээр дагаж үзээрэй.")
     if S.get("ct"):
         lines.append(CT_NOTE)
     lines += ["", chart_link(pair_key, tf), "Автомат техник санаа. Санхүүгийн зөвлөгөө биш."]
@@ -1095,7 +1120,7 @@ def pct_text(entry, price):
     return f"{(price - entry) / entry * 100:+.2f}%"
 
 
-def st_message(pair_key, tf, P, price, prev=None, ct=False, test=False):
+def st_message(pair_key, tf, P, price, prev=None, ct=False, test=False, trend_kind="sma"):
     p = PAIRS[pair_key]
     dec, d = p["dec"], P["dir"]
     lines = []
@@ -1107,7 +1132,7 @@ def st_message(pair_key, tf, P, price, prev=None, ct=False, test=False):
         f"📈 Supertrend · {'🟢 BUY' if d == 1 else '🔴 SELL'}",
         f"{p['name']} · {TF[tf][4]}",
         f"Дохио гарсан: {fmt_time(P['time'])}",
-        trend_line(d, ct),
+        trend_line(d, ct, trend_kind),
         "",
         f"Оролт (Market): {fmt_p(P['entry'], dec)}" + (f" ({p['sym']})" if p.get("pct") else ""),
         f"SL: {fmt_p(P['sl'], dec)}  ({pct_text(P['entry'], P['sl'])})",
@@ -1180,7 +1205,8 @@ def dtc_close_text(pair_key, tf, rec, out):
 
 METHOD_NAMES = {"ema": "📊 EMA", "smc": "🧠 SMC", "vp": "📦 VP", "st": "📈 Supertrend", "dtc": "🧪 DTC",
                 "smc_ct": "⚠️ SMC эсрэг", "vp_ct": "⚠️ VP эсрэг", "st_ct": "⚠️ Supertrend эсрэг",
-                "dtc_ct": "⚠️ DTC эсрэг"}
+                "dtc_ct": "⚠️ DTC эсрэг", "st_t": "🧪 Supertrend", "smc_t": "🧪 SMC"}
+# "_t" төгсгөлтэй арга = 🧪 туршилтын хослол (config-д "test": true). Тайланд тусад нь тоолно.
 
 
 def ct_tag(msg, ct):
@@ -1212,9 +1238,11 @@ def report_text(state, now_ms, days=7):
             lines.append(f"{name}: {len(rs)} арилжаа · {w} ашигтай / {len(rs) - w} алдагдал · {sum(rs):+.1f}R")
             total += sum(rs)
         return lines, total
-    is_ct = lambda x: x["m"].endswith("_ct")  # noqa: E731
-    main_led = [x for x in led if not is_ct(x)]
+    is_ct = lambda x: "_ct" in x["m"]  # noqa: E731
+    is_t = lambda x: x["m"].endswith("_t") and not is_ct(x)  # noqa: E731
+    main_led = [x for x in led if not is_ct(x) and not is_t(x)]
     ct_led = [x for x in led if is_ct(x)]
+    t_led = [x for x in led if is_t(x)]
     week, wt = block([x for x in main_led if x["t"] >= since])
     allr, at = block(main_led)
     start = fmt_time(state.get("ledger_start", now_ms))[:5] if led else fmt_time(now_ms)[:5]
@@ -1233,6 +1261,13 @@ def report_text(state, now_ms, days=7):
                 f"Сүүлийн {days} хоног: " + (f"{cwt:+.1f}R" if cw else "хаагдсан арилжаа алга")]
         out += cw
         out += [f"Эхэлснээс хойш: {cat:+.1f}R"]
+    if t_led:
+        tw, twt = block([x for x in t_led if x["t"] >= since])
+        _, tat = block(t_led)
+        out += ["", "🧪 Туршилтын хослол (дээрх дүнд ороогүй)",
+                f"Сүүлийн {days} хоног: " + (f"{twt:+.1f}R" if tw else "хаагдсан арилжаа алга")]
+        out += tw
+        out += [f"Эхэлснээс хойш: {tat:+.1f}R"]
     out += ["", "R = нэг арилжааны эрсдэл. Спред, шимтгэлийг тооцоогүй. Limit биелээгүй дохиог тоолоогүй."]
     return "\n".join(out)
 
@@ -1324,6 +1359,17 @@ def main():
              "S&P 500, Dow, DAX, газрын тос, Bitcoin зэрэг нь туршилтад тэнцээгүй.")
         state["mk2_announced"] = True
 
+    if not state.get("mk3_announced") and any(w.get("pair") in ("BTCUSD", "USDCAD") for w in watch):
+        send("🧪 Шинэ туршилтын дохио нэмэгдлээ\n"
+             "• 📈 Bitcoin, ETH · 15 минут · Supertrend + 4 цагийн чиг (EMA50) — 4 цагийн лаа EMA50-аас дээр бол "
+             "зөвхөн BUY, доор бол зөвхөн SELL. 2.5 жилд BTC +72R (6/6 хэсэгт ашигтай), ETH +104R (5/6), "
+             "долоо хоногт тус бүр ~6–7 дохио. Спред/шимтгэлд маш мэдрэмтгий: нэг арилжааны зардал үнийн "
+             "~0.06%-аас (BTC) их бол ашиг алга болно\n"
+             "• 🧠 USD/CAD · 1 цаг · SMC BOS + 4 цагийн бүтэц + 200 өдрийн чиг — 2 жилд +24R / 56 арилжаа, "
+             "ялалт 50%, гэхдээ жишээ цөөн\n"
+             "EUR/USD, USD/JPY (15 мин, 3 жил), AUD/USD (1 цаг) туршилтад тэнцээгүй. 🧪 дохиог тайланд тусад нь тоолно.")
+        state["mk3_announced"] = True
+
     if not state.get("ct_announced") and config.get("counter_trend"):
         send("⚠️ Шинэ: чигийн ЭСРЭГ дохио (туршилт)\n"
              "Одоогоос VP, SMC, DTC, Supertrend аргууд 200 өдрийн чигийн эсрэг BUY/SELL дохиог ч илгээнэ. "
@@ -1370,6 +1416,7 @@ def main():
             S["htf_tf"] = htf_tf
             S["sma"] = bool(w.get("smc_sma"))
             S["ct"] = ct
+            S["test"] = bool(w.get("test"))
         if not S:
             print(f"{key}: {label} бүтэц алга")
             return
@@ -1394,7 +1441,7 @@ def main():
                 send(msg)
                 print(f"  → {label} {rec.get('status')} → {S['status']}")
             if rec.get("sent") and S["status"] in ("tp", "sl"):
-                record(state, bucket, key, SMC["tp_r"] if S["status"] == "tp" else -1.0)
+                record(state, bucket + ("_t" if w.get("test") else ""), key, SMC["tp_r"] if S["status"] == "tp" else -1.0)
             rec["status"] = S["status"]
 
     def track_vp(key, w, now_ms, ct=False):
@@ -1444,12 +1491,16 @@ def main():
     def track_st(key, w, bars, now_ms, ct=False):
         bucket = "st_ct" if ct else "st"
         label = "Supertrend эсрэг" if ct else "Supertrend"
-        src = PAIRS[w["pair"]]["src"]
-        daily = get_daily() if w["pair"] == "XAUUSD" else (
-            get_daily_bn(PAIRS[w["pair"]]["sym"]) if src == "bn" else
-            fetch_yahoo(PAIRS[w["pair"]]["sym"], "1d") if src == "yf" else get_daily_td(w["pair"]))
-        if len(daily) < VP["sma"] + 5:
-            raise DataError(f"{key}: өдрийн өгөгдөл хүрэлцэхгүй ({len(daily)})")
+        kind = w.get("st_trend", "sma")
+        led_m = bucket + ("_t" if w.get("test") else "")
+        if kind == "4h_ema50":
+            daily, trend = None, ema_trend_fn(get_bars(w["pair"], "4h"), now_ms)
+            if not trend(now_ms):
+                raise DataError(f"{key}: 4 цагийн өгөгдөл хүрэлцэхгүй")
+        else:
+            daily, trend = get_daily_for(w["pair"]), None
+            if len(daily) < VP["sma"] + 5:
+                raise DataError(f"{key}: өдрийн өгөгдөл хүрэлцэхгүй ({len(daily)})")
         rec = state.setdefault(bucket, {}).get(key)
         price = bars[-1]["c"]
         prev = None
@@ -1458,15 +1509,15 @@ def main():
             if out:
                 prev = ct_tag(st_close_text(w["pair"], w["tf"], rec, out), ct)
                 if rec.get("sent"):
-                    record(state, bucket, key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
+                    record(state, led_m, key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
                 rec["status"] = out["status"]
-        P = st_signal(bars, daily, now_ms, side=-1 if ct else 1)
+        P = st_signal(bars, daily, now_ms, side=-1 if ct else 1, trend=trend)
         print(f"{key}: {label} {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) + ' · ' + P['status'] if P else 'дохио алга'}")
         if P and (not rec or rec.get("time") != P["time"]) and not (rec and rec.get("status") == "open"):
             if not rec and (P["age"] >= ST["fresh_bars"] or now_ms - P["time"] > ST["fresh_bars"] * TF[w["tf"]][0] * 1000):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif P["status"] == "open":
-                send(st_message(w["pair"], w["tf"], P, price, prev, ct, bool(w.get("test"))))
+                send(st_message(w["pair"], w["tf"], P, price, prev, ct, bool(w.get("test")), kind))
                 print(f"  → {label} дохио илгээлээ")
                 prev = None
                 P["sent"] = True
@@ -1528,11 +1579,35 @@ def main():
             cache[("daily", sym)] = fetch_binance(sym, "1d")
         return cache[("daily", sym)]
 
+    def get_daily_yf(pair):
+        """Yahoo-ийн өдрийн лаа. Ажлын дотор цагт нэг удаа л татна."""
+        k = f"daily:{pair}"
+        hit = last_fetch.get(k)
+        if hit and minute - hit["minute"] < 60:
+            return hit["bars"]
+        bars = fetch_yahoo(PAIRS[pair]["sym"], "1d")
+        last_fetch[k] = {"minute": minute, "bars": bars}
+        return bars
+
+    def get_daily_for(pair):
+        """200 өдрийн чигт тухайн хослолын өөрийн өдрийн лаа."""
+        src = PAIRS[pair]["src"]
+        if pair == "XAUUSD":
+            return get_daily()
+        if src == "bn":
+            return get_daily_bn(PAIRS[pair]["sym"])
+        if src == "yf":
+            return get_daily_yf(pair)
+        return get_daily_td(pair)
+
     def get_bars(pair, tf):
         if (pair, tf) not in cache:
             if PAIRS[pair]["src"] == "td" and tf in ("1h", "4h"):
                 # Twelve Data-ийн лимит хэмнэх: 15 минутын лаанаас 1 цаг, 4 цагийг нэгтгэж гаргана
                 cache[(pair, tf)] = aggregate(get_bars(pair, "15m"), TF["15m"][0] * 1000, tf)
+            elif PAIRS[pair]["src"] == "yf" and tf == "4h":
+                # Yahoo-д 4 цаг байхгүй тул 1 цагийн лаанаас нэгтгэнэ
+                cache[(pair, tf)] = aggregate(get_bars(pair, "1h"), TF["1h"][0] * 1000, tf)
             else:
                 cache[(pair, tf)] = fetch_bars(pair, tf, td_key)
         return cache[(pair, tf)]
@@ -1597,7 +1672,7 @@ def main():
                 kinds = tuple(w.get("smc_kinds", ["BOS", "CHoCH"]))
                 if w.get("smc_sma"):
                     # 200 өдрийн чигийн шүүлтүүр: том хугацааны чиг ба 200 өдрийн чиг хоёулаа таарах ёстой
-                    sma, base = sma_trend_fn(get_daily()), htf
+                    sma, base = sma_trend_fn(get_daily_for(pair)), htf
                     with_tr = (lambda t, sma=sma, base=base: sma(t) if (base is None or base(t) == sma(t)) else 0)
                     track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, with_tr, htf_tf)
                     if ct_on:
