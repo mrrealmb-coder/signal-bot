@@ -2,7 +2,8 @@
   "chat_ids": [
     "5371043257",
     "-5544664828",
-    "-5562831381"
+    "-5562831381",
+    "-5078732888"
   ],
   "chat_roles": {
     "-1004482695939": "off",
@@ -104,6 +105,7 @@
   "mk3_announced": true,
   "names": {
     "-1004482695939": "Mu, Odkoo and Mubbot",
+    "-5078732888": "Scalp",
     "-5363490041": "Mu, Odkoo and Mubbot",
     "-5544664828": "Khuleg Day",
     "-5562831381": "Khuleg Swing",
@@ -268,7 +270,7 @@
     }
   },
   "started": true,
-  "update_offset": 291487591,
+  "update_offset": 291487595,
   "vp": {
     "SOLUSD|1h": {
       "dir": 1,
