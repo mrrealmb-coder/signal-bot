@@ -147,7 +147,7 @@
     "XAUUSD|1h": {
       "dir": -1,
       "sent": true,
-      "status": "pending",
+      "status": "filled",
       "time": 1793264400000
     }
   },
