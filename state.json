@@ -73,6 +73,7 @@
   ],
   "ledger_start": 1793195530901,
   "mk2_announced": true,
+  "mk3_announced": true,
   "names": {
     "-1004482695939": "Mu, Odkoo and Mubbot",
     "-5363490041": "Mu, Odkoo and Mubbot"
@@ -117,6 +118,11 @@
       "status": "pending",
       "time": 1793048400000
     },
+    "USDCAD|1h": {
+      "dir": 1,
+      "status": "sl",
+      "time": 1791262800000
+    },
     "USDJPY|15m": {
       "dir": 1,
       "status": "tp",
@@ -147,6 +153,22 @@
     }
   },
   "st": {
+    "BTCUSD|15m": {
+      "dir": -1,
+      "entry": 79818.02,
+      "sent": null,
+      "sl": 80397.74359136766,
+      "status": "exit",
+      "time": 1793070000000
+    },
+    "ETHUSD|15m": {
+      "dir": -1,
+      "entry": 2346.51,
+      "sent": null,
+      "sl": 2373.6432329356394,
+      "status": "exit",
+      "time": 1793189700000
+    },
     "NAS100|15m": {
       "dir": 1,
       "entry": 708.84998,
