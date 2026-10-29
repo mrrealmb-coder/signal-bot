@@ -5,7 +5,10 @@
     "-5544664828",
     "-5562831381"
   ],
-  "chat_roles": {},
+  "chat_roles": {
+    "-5544664828": "day",
+    "-5562831381": "swing"
+  },
   "ct_announced": true,
   "day": {},
   "day_announced": true,
@@ -244,7 +247,7 @@
     }
   },
   "started": true,
-  "update_offset": 291487582,
+  "update_offset": 291487584,
   "vp": {
     "SOLUSD|1h": {
       "dir": 1,
