@@ -16,11 +16,12 @@
   "dtc": {
     "XAUUSD|15m": {
       "dir": -1,
-      "entry": 4010.38,
-      "sl": 4025.86,
-      "status": "sl",
-      "time": 1793079900000,
-      "tp": 3979.42
+      "entry": 4039.25,
+      "sent": true,
+      "sl": 4060.26,
+      "status": "open",
+      "time": 1793245500000,
+      "tp": 3997.2299999999996
     }
   },
   "dtc_announced": true,
