@@ -835,6 +835,14 @@ def chat_name(chat):
     return " ".join(x for x in (chat.get("first_name"), chat.get("last_name")) if x) or chat.get("username") or str(chat["id"])
 
 
+ROLE_TEXT = {
+    "/swing": "✅ Энэ чат: 📈 Swing. Бүх дохио ирнэ (📅 Day мөр, «Day хаах» мэдэгдэлгүй).",
+    "/day": "✅ Энэ чат: 📅 Day арилжаа. Зөвхөн алтны day дохио, тэдгээрийн хаах мэдэгдэл ирнэ.",
+    "/all": "✅ Энэ чат бүх дохиог (Swing + Day) авна.",
+    "/off": "🔕 Энэ чатад дохио илгээхгүй. Дахин авах бол /all, /swing эсвэл /day гэж бичнэ үү.",
+}
+
+
 def sync_chats(token, state):
     """Telegram-ийн шинэ үйлдлүүдийг боловсруулна.
 
@@ -910,11 +918,27 @@ def sync_chats(token, state):
             chat = m["chat"]
             text = (m.get("text") or "").strip()
             cid = str(chat["id"])
+            sender = str((m.get("from") or {}).get("id", ""))
+            p0 = text.split()[0].split("@")[0] if text else ""
+            if sender == state.get("owner") and p0 in ROLE_TEXT:
+                # Эзэмшигч тухайн чатын үүргийг тохируулна (Swing / Day групп)
+                roles = state.setdefault("chat_roles", {})
+                if p0 == "/all":
+                    roles.pop(cid, None)
+                else:
+                    roles[cid] = p0[1:]
+                if cid not in chats:
+                    chats.append(cid)
+                    pending.pop(cid, None)
+                names[cid] = chat_name(chat)
+                try_send(token, cid, ROLE_TEXT[p0])
+                continue
             if cid == state.get("owner"):
                 parts = text.split()
                 cmd = parts[0].split("@")[0] if parts else ""
                 if cmd == "/list":
-                    others = [f"{names.get(c, c)} (id {c})" for c in chats if c != cid]
+                    rl = state.get("chat_roles", {})
+                    others = [f"{names.get(c, c)} (id {c})" + (f" · {rl[c]}" if c in rl else "") for c in chats if c != cid]
                     owner_msg("📋 Хүлээн авагчид:\n" + ("\n".join(others) if others else "Зөвхөн та.")
                               + ("\n\n⏳ Хүлээгдэж буй: " + ", ".join(f"{v} (id {k})" for k, v in pending.items())
                                  if pending else ""))
@@ -1360,9 +1384,17 @@ def main():
                  "\n📊 EMA дохио ба 🧠 SMC санааг тус тусад нь энд мэдэгдэнэ.")
         state["started"] = True
 
-    def send(text):
+    roles = state.setdefault("chat_roles", {})
+
+    def send(text, kind="all", swing_text=None):
+        """kind: "all" = бүх чат, "swing" = Day чатад илгээхгүй, "day" = Swing чатад илгээхгүй.
+        Чатын үүрэг (эзэмшигч группт /swing, /day, /all, /off гэж тохируулна): тохируулаагүй чат бүгдийг авна.
+        swing_text: Swing чатад өөр (📅 мөргүй) хувилбар илгээх бол."""
         for cid in list(chats):
-            if not try_send(token, cid, text):
+            role = roles.get(cid)
+            if role == "off" or (role == "day" and kind == "swing") or (role == "swing" and kind == "day"):
+                continue
+            if not try_send(token, cid, swing_text if (role == "swing" and swing_text) else text):
                 chats.remove(cid)  # ботыг блоклосон эсвэл группээс хасагдсан
                 print("Хүлээн авагч хасагдлаа:", cid)
 
@@ -1450,6 +1482,18 @@ def main():
                               "px": VP["sym"] if (m == "vp" and w["pair"] == "XAUUSD") else None}
         return add_day_line(msg, cut, limit)
 
+    def kind_for(m, key, t):
+        """Позицийн мэдэгдэл: day-ээр нээлттэй бол хоёр чатад, үгүй бол зөвхөн Swing чатад."""
+        d = days.get(f"{m}|{key}")
+        return "all" if d and d["time"] == t and d["status"] in ("open", "pending") else "swing"
+
+    def send_signal(msg, dmsg):
+        """Шинэ дохио: day-д тохирвол хоёр чатад (Swing чатад 📅 мөргүй), үгүй бол зөвхөн Swing чатад."""
+        if dmsg != msg:
+            send(dmsg, "all", swing_text=msg)
+        else:
+            send(msg, "swing")
+
     def day_result(m, key, t, r):
         """Үндсэн позиц хаалтаас өмнө хаагдвал day-ийн үр дүн ижил."""
         d = days.get(f"{m}|{key}")
@@ -1468,6 +1512,9 @@ def main():
                 continue
             if d["status"] == "pending":
                 d["status"] = "cancel"
+                send(f"📅 Day · {METHOD_NAMES.get(dk.split('|')[0], '')} · {head(d['pair'], d['tf'], d['dir'])}\n"
+                     f"Limit {fmt_p(d['entry'], PAIRS[d['pair']]['dec'])} өдрийн хаалт хүртэл биелсэнгүй. "
+                     "Day-ээр бол захиалгаа цуцална уу.", "day")
                 continue
             try:
                 if d.get("px"):
@@ -1484,7 +1531,7 @@ def main():
             send(f"📅 Day хаах · {METHOD_NAMES.get(m, m)} · {head(d['pair'], d['tf'], d['dir'])}\n"
                  f"IC Markets-ийн өдрийн хаалт (swap) ойртлоо. Day арилжаагаа {fmt_p(price, dec)} орчимд хаана уу. "
                  f"Үр дүн ≈ {r:+.1f}R\n"
-                 "Swing-ээр барьж байгаа бол үндсэн дохионы хаах мэдэгдлийг хүлээнэ.")
+                 "Swing-ээр барьж байгаа бол үндсэн дохионы хаах мэдэгдлийг хүлээнэ.", "day")
             record(state, m + "_d", key, r)
             d["status"] = "done"
             print(f"  → 📅 Day хаах {dk} {r:+.2f}R")
@@ -1505,7 +1552,7 @@ def main():
                 if rec and rec.get("status") == "pending":
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
                 market_ok = res["action"] in ("buy", "sell") and order["status"] == "pending"
-                send(order_message(w["pair"], w["tf"], L, order, res["price"], market_ok, cancel_prev))
+                send(order_message(w["pair"], w["tf"], L, order, res["price"], market_ok, cancel_prev), "swing")
                 print("  → EMA дохио илгээлээ")
                 state["orders"][key] = {"time": L["time"], "dir": L["dir"], "status": order["status"], "sent": True}
                 return
@@ -1514,7 +1561,7 @@ def main():
         if order["status"] != rec.get("status"):
             msg = transition_message(w["pair"], w["tf"], L, order, rec.get("status"))
             if msg:
-                send(msg)
+                send(msg, "swing")
                 print(f"  → EMA {rec.get('status')} → {order['status']}")
             if rec.get("sent") and order["status"] in ("tp", "sl"):
                 record(state, "ema", key, RULES["tp_r"] if order["status"] == "tp" else -1.0)
@@ -1542,9 +1589,8 @@ def main():
                 if rec and rec.get("status") == "pending":
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
                 msg = smc_message(w["pair"], w["tf"], S, price, cancel_prev)
-                if not ct:
-                    msg = day_msg(w, bucket, key, msg, S, limit=S["status"] == "pending")
-                send(msg)
+                dmsg = msg if ct else day_msg(w, bucket, key, msg, S, limit=S["status"] == "pending")
+                send_signal(msg, dmsg)
                 print(f"  → {label} санаа илгээлээ")
                 state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"], "sent": True}
                 return
@@ -1553,7 +1599,7 @@ def main():
         if S["status"] != rec.get("status"):
             msg = ct_tag(smc_transition(w["pair"], w["tf"], S, rec.get("status")), ct)
             if msg:
-                send(msg)
+                send(msg, "swing" if ct else kind_for(bucket, key, S["time"]))
                 print(f"  → {label} {rec.get('status')} → {S['status']}")
             if rec.get("sent") and S["status"] in ("tp", "sl"):
                 r = SMC["tp_r"] if S["status"] == "tp" else -1.0
@@ -1580,11 +1626,12 @@ def main():
             raise DataError(f"VP: өгөгдөл хүрэлцэхгүй ({len(pbars)} цаг, {len(daily)} өдөр)")
         rec = state.setdefault(bucket, {}).get(key)
         price = pbars[-1]["c"]
-        prev = None
+        prev, prev_kind = None, "swing"
         if rec and rec.get("status") == "open":
             st, t_ms, px = vp_outcome(pbars, rec, now_ms)
             if st != "open":
                 prev = ct_tag(vp_close_text(w["pair"], w["tf"], rec, st, t_ms, px), ct)
+                prev_kind = "swing" if ct else kind_for(bucket, key, rec["time"])
                 if rec.get("sent"):
                     r = (px - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
                     record(state, bucket, key, r)
@@ -1602,14 +1649,17 @@ def main():
             if not rec and (S["age"] >= VP["fresh_bars"] or now_ms - S["time"] > VP["fresh_bars"] * step_ms):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif st == "open":
-                msg = vp_message(w["pair"], w["tf"], S, price, prev, ct)
-                send(msg if ct else day_msg(w, bucket, key, msg, S))
+                if prev:
+                    send(prev, prev_kind)
+                    print(f"  → {label} позиц хаагдлаа")
+                msg = vp_message(w["pair"], w["tf"], S, price, None, ct)
+                send_signal(msg, msg if ct else day_msg(w, bucket, key, msg, S))
                 print(f"  → {label} дохио илгээлээ")
                 prev, sent = None, True
             state[bucket][key] = {"time": S["time"], "dir": S["dir"], "entry": S["entry"], "sl": S["sl"],
                                   "tp": S["tp"], "status": st, "sent": sent}
         if prev:
-            send(prev)
+            send(prev, prev_kind)
             print(f"  → {label} позиц хаагдлаа")
 
     def track_st(key, w, bars, now_ms, ct=False):
@@ -1627,11 +1677,12 @@ def main():
                 raise DataError(f"{key}: өдрийн өгөгдөл хүрэлцэхгүй ({len(daily)})")
         rec = state.setdefault(bucket, {}).get(key)
         price = bars[-1]["c"]
-        prev = None
+        prev, prev_kind = None, "swing"
         if rec and rec.get("status") == "open":
             out = st_outcome(bars, supertrend([b for b in bars if b["ct"] < now_ms]), rec, now_ms)
             if out:
                 prev = ct_tag(st_close_text(w["pair"], w["tf"], rec, out), ct)
+                prev_kind = "swing" if ct else kind_for(bucket, key, rec["time"])
                 if rec.get("sent"):
                     r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
                     record(state, led_m, key, r)
@@ -1644,14 +1695,17 @@ def main():
             if not rec and (P["age"] >= ST["fresh_bars"] or now_ms - P["time"] > ST["fresh_bars"] * TF[w["tf"]][0] * 1000):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif P["status"] == "open":
-                msg = st_message(w["pair"], w["tf"], P, price, prev, ct, bool(w.get("test")), kind)
-                send(msg if ct else day_msg(w, bucket, key, msg, P))
+                if prev:
+                    send(prev, prev_kind)
+                    print(f"  → {label} позиц хаагдлаа")
+                msg = st_message(w["pair"], w["tf"], P, price, None, ct, bool(w.get("test")), kind)
+                send_signal(msg, msg if ct else day_msg(w, bucket, key, msg, P))
                 print(f"  → {label} дохио илгээлээ")
                 prev = None
                 P["sent"] = True
             state[bucket][key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "status", "sent")}
         if prev:
-            send(prev)
+            send(prev, prev_kind)
             print(f"  → {label} позиц хаагдлаа")
 
     def track_dtc(key, w, bars, now_ms, ct=False):
@@ -1663,7 +1717,7 @@ def main():
         if rec and rec.get("status") == "open":
             out = dtc_outcome(bars, rec, now_ms)
             if out:
-                send(ct_tag(dtc_close_text(w["pair"], w["tf"], rec, out), ct))
+                send(ct_tag(dtc_close_text(w["pair"], w["tf"], rec, out), ct), "swing")
                 if rec.get("sent"):
                     record(state, bucket, key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
                 rec["status"] = out["status"]
@@ -1674,7 +1728,7 @@ def main():
             if not rec and (S["age"] >= DTC["fresh_bars"] or now_ms - S["time"] > DTC["fresh_bars"] * TF[w["tf"]][0] * 1000):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif S["status"] == "open":
-                send(dtc_message(w["pair"], w["tf"], S, price, ct))
+                send(dtc_message(w["pair"], w["tf"], S, price, ct), "swing")
                 print(f"  → {label} дохио илгээлээ")
                 S["sent"] = True
             state[bucket][key] = {k: S.get(k) for k in ("time", "dir", "entry", "sl", "tp", "status", "sent")}
