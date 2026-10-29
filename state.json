@@ -5,6 +5,7 @@
   ],
   "ct_announced": true,
   "day": {},
+  "day_announced": true,
   "dtc": {
     "XAUUSD|15m": {
       "dir": -1,
