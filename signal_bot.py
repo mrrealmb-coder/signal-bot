@@ -72,6 +72,43 @@ ST = {"atr": 10, "factor": 3.0, "hold": 240, "fresh_bars": 2}
 # 200 өдрийн шүүлтүүрээс илүү гарсан (BTC +72R 6/6 үе, ETH +104R 5/6), гэхдээ спред/шимтгэлд маш мэдрэмтгий.
 H4_EMA = 50
 
+# 📅 Day арилжаа (config-д хослол дээр "day": true, одоогоор зөвхөн алт). Swing дохиог өөрчлөхгүй: IC Markets-ийн
+# алтны сесс (серверийн цаг 01:02–23:59, сервер = GMT+2, АНУ-ын зуны цагаар GMT+3) дотор, серверийн 23:00-аас өмнө
+# гарсан SMC / VP / Supertrend дохиог «day-д тохиромжтой» гэж тэмдэглээд, серверийн 23:45 (өдрийн хаалт, swap-аас
+# өмнө) хүртэл хаагдаагүй бол «📅 Day хаах» мэдэгдэл илгээнэ. Үр дүнг "_d" нэрээр тусад нь тоолно.
+DAY = {"open_srv": 1.05, "last_entry_srv": 23.0, "close_srv": 23.75}
+
+
+def srv_offset_ms(t_ms):
+    """IC Markets серверийн цагийн UTC-ээс зөрүү: Нью-Йорк + 7 цаг (GMT+2 өвөл / GMT+3 зун)."""
+    try:
+        from zoneinfo import ZoneInfo
+        ny = datetime.fromtimestamp(t_ms / 1000, ZoneInfo("America/New_York")).utcoffset().total_seconds()
+        return int((ny + 7 * 3600) * 1000)
+    except Exception:  # noqa: BLE001
+        return 2 * 3600000
+
+
+def day_cut(t_ms):
+    """Дохионы цаг day цонхонд багтвал тэр серверийн өдрийн хаах мөчийг (ms), үгүй бол None буцаана."""
+    off = srv_offset_ms(t_ms)
+    ts = t_ms + off
+    day0 = ts // 86400000 * 86400000
+    hr = (ts - day0) / 3600000
+    if DAY["open_srv"] <= hr < DAY["last_entry_srv"]:
+        return day0 - off + int(DAY["close_srv"] * 3600000)
+    return None
+
+
+def add_day_line(msg, cut, limit=False):
+    """Дохионы мэдэгдэлд 📅 Day мөрийг (график холбоосын өмнө) нэмнэ."""
+    lines = msg.split("\n")
+    note = (f"📅 Day арилжаа: {fmt_time(cut)[-5:]} (IC Markets-ийн өдрийн хаалт, swap-аас өмнө) хүртэл хаагдаагүй бол "
+            "бот «Day хаах» мэдэгдэл илгээнэ. Swing-ээр барих бол үргэлжлүүлж болно.")
+    if limit:
+        note += " Limit тэр хүртэл биелэхгүй бол day-д цуцална."
+    return "\n".join(lines[:-3] + [note] + lines[-3:])
+
 # 🧪 DTC (DTC Trading Club индикаторын нийтэлсэн тайлбараар хуулбарласан) — туршилтын дохио.
 #   EMA 30/35/40/45/50/60 бүгд дарааллаар жагсахад (саармаг/эсрэгээс) орно.
 #   ATR(14) нь өмнөх 50 лааны дунджаас бага бол алгасна. Зөвхөн 200 өдрийн чигийн дагуу.
@@ -1205,7 +1242,8 @@ def dtc_close_text(pair_key, tf, rec, out):
 
 METHOD_NAMES = {"ema": "📊 EMA", "smc": "🧠 SMC", "vp": "📦 VP", "st": "📈 Supertrend", "dtc": "🧪 DTC",
                 "smc_ct": "⚠️ SMC эсрэг", "vp_ct": "⚠️ VP эсрэг", "st_ct": "⚠️ Supertrend эсрэг",
-                "dtc_ct": "⚠️ DTC эсрэг", "st_t": "🧪 Supertrend", "smc_t": "🧪 SMC"}
+                "dtc_ct": "⚠️ DTC эсрэг", "st_t": "🧪 Supertrend", "smc_t": "🧪 SMC",
+                "smc_d": "📅 SMC day", "vp_d": "📅 VP day", "st_d": "📅 Supertrend day"}
 # "_t" төгсгөлтэй арга = 🧪 туршилтын хослол (config-д "test": true). Тайланд тусад нь тоолно.
 
 
@@ -1240,9 +1278,11 @@ def report_text(state, now_ms, days=7):
         return lines, total
     is_ct = lambda x: "_ct" in x["m"]  # noqa: E731
     is_t = lambda x: x["m"].endswith("_t") and not is_ct(x)  # noqa: E731
-    main_led = [x for x in led if not is_ct(x) and not is_t(x)]
+    is_d = lambda x: x["m"].endswith("_d")  # noqa: E731
+    main_led = [x for x in led if not is_ct(x) and not is_t(x) and not is_d(x)]
     ct_led = [x for x in led if is_ct(x)]
     t_led = [x for x in led if is_t(x)]
+    d_led = [x for x in led if is_d(x)]
     week, wt = block([x for x in main_led if x["t"] >= since])
     allr, at = block(main_led)
     start = fmt_time(state.get("ledger_start", now_ms))[:5] if led else fmt_time(now_ms)[:5]
@@ -1261,6 +1301,13 @@ def report_text(state, now_ms, days=7):
                 f"Сүүлийн {days} хоног: " + (f"{cwt:+.1f}R" if cw else "хаагдсан арилжаа алга")]
         out += cw
         out += [f"Эхэлснээс хойш: {cat:+.1f}R"]
+    if d_led:
+        dw, dwt = block([x for x in d_led if x["t"] >= since])
+        _, dat = block(d_led)
+        out += ["", "📅 Day арилжаа (ижил дохиог өдрийн хаалтаас өмнө хаасан бол, дээрх дүнд ороогүй)",
+                f"Сүүлийн {days} хоног: " + (f"{dwt:+.1f}R" if dw else "хаагдсан арилжаа алга")]
+        out += dw
+        out += [f"Эхэлснээс хойш: {dat:+.1f}R"]
     if t_led:
         tw, twt = block([x for x in t_led if x["t"] >= since])
         _, tat = block(t_led)
@@ -1370,6 +1417,16 @@ def main():
              "EUR/USD, USD/JPY (15 мин, 3 жил), AUD/USD (1 цаг) туршилтад тэнцээгүй. 🧪 дохиог тайланд тусад нь тоолно.")
         state["mk3_announced"] = True
 
+    if not state.get("day_announced") and any(w.get("day") for w in watch):
+        send("📅 Шинэ: Day арилжаа (зөвхөн алт)\n"
+             "Одоогийн swing дохио хэвээр. Харин IC Markets-ийн алтны сессийн дотор гарсан 🧠 SMC 15м, 📦 VP 1ц, "
+             "📈 Supertrend 1ц дохион дээр «📅 Day арилжаа» гэсэн мөр нэмэгдэнэ.\n"
+             "• Позиц IC Markets-ийн өдрийн хаалт (серверийн 23:45, Улаанбаатарын ~04:45, 11/1-ээс ~05:45) хүртэл "
+             "хаагдаагүй бол бот «📅 Day хаах» мэдэгдэл илгээнэ — swap төлөхгүй\n"
+             "• Day-ээр дагах бол тэр мэдэгдлээр хаана, swing-ээр бол үндсэн хаах мэдэгдлийг хүлээнэ\n"
+             "• Day-ийн үр дүнг /report тайланд тусад нь тоолно")
+        state["day_announced"] = True
+
     if not state.get("ct_announced") and config.get("counter_trend"):
         send("⚠️ Шинэ: чигийн ЭСРЭГ дохио (туршилт)\n"
              "Одоогоос VP, SMC, DTC, Supertrend аргууд 200 өдрийн чигийн эсрэг BUY/SELL дохиог ч илгээнэ. "
@@ -1378,6 +1435,61 @@ def main():
              "• Үр дүнг /report тайланд тусад нь тоолно, үндсэн дүнд оруулахгүй\n"
              "• Мөнгө тавихгүйгээр 1 сар ажиглаад бодит үр дүнгээр нь шийдье")
         state["ct_announced"] = True
+
+    # ---- 📅 Day арилжааны туслахууд (swing дохиог өөрчлөхгүй, ижил дохиог 24:00-д хаасан мэтээр хянана)
+    days = state.setdefault("day", {})
+
+    def day_msg(w, m, key, msg, P, limit=False):
+        """Дохио илгээхийн өмнө: day-д тохирвол мөр нэмж, бүртгэнэ."""
+        cut = day_cut(P["time"]) if w.get("day") else None
+        if not cut or now_ms >= cut:
+            return msg
+        days[f"{m}|{key}"] = {"time": P["time"], "dir": P["dir"], "entry": P["entry"], "sl": P["sl"], "cut": cut,
+                              "status": "pending" if limit else "open", "pair": w["pair"], "tf": w["tf"],
+                              # алтны VP-ийн оролт PAXG-ийн үнээр тул хаах үнийг ч PAXG-аас авна
+                              "px": VP["sym"] if (m == "vp" and w["pair"] == "XAUUSD") else None}
+        return add_day_line(msg, cut, limit)
+
+    def day_result(m, key, t, r):
+        """Үндсэн позиц хаалтаас өмнө хаагдвал day-ийн үр дүн ижил."""
+        d = days.get(f"{m}|{key}")
+        if d and d["time"] == t and d["status"] in ("open", "pending"):
+            record(state, m + "_d", key, r)
+            d["status"] = "done"
+
+    def day_fill(m, key, t, status):
+        d = days.get(f"{m}|{key}")
+        if d and d["time"] == t and d["status"] == "pending":
+            d["status"] = "open" if status == "filled" else ("cancel" if status == "expired" else d["status"])
+
+    def day_sweep():
+        for dk, d in days.items():
+            if d["status"] not in ("open", "pending") or now_ms < d["cut"]:
+                continue
+            if d["status"] == "pending":
+                d["status"] = "cancel"
+                continue
+            try:
+                if d.get("px"):
+                    pb = cache.get(("vp_1h", d["px"])) or fetch_binance(d["px"], "1h")
+                    price = pb[-1]["c"]
+                else:
+                    price = get_bars(d["pair"], d["tf"])[-1]["c"]
+            except Exception as e:  # noqa: BLE001
+                print("Day: үнэ алга", dk, e)
+                continue
+            m, key = dk.split("|", 1)
+            r = (price - d["entry"]) * d["dir"] / abs(d["entry"] - d["sl"])
+            dec = PAIRS[d["pair"]]["dec"]
+            send(f"📅 Day хаах · {METHOD_NAMES.get(m, m)} · {head(d['pair'], d['tf'], d['dir'])}\n"
+                 f"IC Markets-ийн өдрийн хаалт (swap) ойртлоо. Day арилжаагаа {fmt_p(price, dec)} орчимд хаана уу. "
+                 f"Үр дүн ≈ {r:+.1f}R\n"
+                 "Swing-ээр барьж байгаа бол үндсэн дохионы хаах мэдэгдлийг хүлээнэ.")
+            record(state, m + "_d", key, r)
+            d["status"] = "done"
+            print(f"  → 📅 Day хаах {dk} {r:+.2f}R")
+        for dk in [k for k, d in days.items() if d["status"] in ("done", "cancel") and now_ms - d["cut"] > 3 * 86400000]:
+            del days[dk]
 
     def track_ema(key, w, bars, res, now_ms, step_ms):
         L = res["last"]
@@ -1429,7 +1541,10 @@ def main():
                 cancel_prev = None
                 if rec and rec.get("status") == "pending":
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
-                send(smc_message(w["pair"], w["tf"], S, price, cancel_prev))
+                msg = smc_message(w["pair"], w["tf"], S, price, cancel_prev)
+                if not ct:
+                    msg = day_msg(w, bucket, key, msg, S, limit=S["status"] == "pending")
+                send(msg)
                 print(f"  → {label} санаа илгээлээ")
                 state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"], "sent": True}
                 return
@@ -1441,7 +1556,12 @@ def main():
                 send(msg)
                 print(f"  → {label} {rec.get('status')} → {S['status']}")
             if rec.get("sent") and S["status"] in ("tp", "sl"):
-                record(state, bucket + ("_t" if w.get("test") else ""), key, SMC["tp_r"] if S["status"] == "tp" else -1.0)
+                r = SMC["tp_r"] if S["status"] == "tp" else -1.0
+                record(state, bucket + ("_t" if w.get("test") else ""), key, r)
+                if not ct:
+                    day_result(bucket, key, S["time"], r)
+            elif not ct:
+                day_fill(bucket, key, S["time"], S["status"])
             rec["status"] = S["status"]
 
     def track_vp(key, w, now_ms, ct=False):
@@ -1466,7 +1586,10 @@ def main():
             if st != "open":
                 prev = ct_tag(vp_close_text(w["pair"], w["tf"], rec, st, t_ms, px), ct)
                 if rec.get("sent"):
-                    record(state, bucket, key, (px - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
+                    r = (px - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
+                    record(state, bucket, key, r)
+                    if not ct:
+                        day_result(bucket, key, rec["time"], r)
                 rec["status"] = st
         S = vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1, step=vstep)
         trend = sma_trend_fn(daily)(now_ms)
@@ -1479,7 +1602,8 @@ def main():
             if not rec and (S["age"] >= VP["fresh_bars"] or now_ms - S["time"] > VP["fresh_bars"] * step_ms):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif st == "open":
-                send(vp_message(w["pair"], w["tf"], S, price, prev, ct))
+                msg = vp_message(w["pair"], w["tf"], S, price, prev, ct)
+                send(msg if ct else day_msg(w, bucket, key, msg, S))
                 print(f"  → {label} дохио илгээлээ")
                 prev, sent = None, True
             state[bucket][key] = {"time": S["time"], "dir": S["dir"], "entry": S["entry"], "sl": S["sl"],
@@ -1509,7 +1633,10 @@ def main():
             if out:
                 prev = ct_tag(st_close_text(w["pair"], w["tf"], rec, out), ct)
                 if rec.get("sent"):
-                    record(state, led_m, key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
+                    r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
+                    record(state, led_m, key, r)
+                    if not ct:
+                        day_result(bucket, key, rec["time"], r)
                 rec["status"] = out["status"]
         P = st_signal(bars, daily, now_ms, side=-1 if ct else 1, trend=trend)
         print(f"{key}: {label} {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) + ' · ' + P['status'] if P else 'дохио алга'}")
@@ -1517,7 +1644,8 @@ def main():
             if not rec and (P["age"] >= ST["fresh_bars"] or now_ms - P["time"] > ST["fresh_bars"] * TF[w["tf"]][0] * 1000):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif P["status"] == "open":
-                send(st_message(w["pair"], w["tf"], P, price, prev, ct, bool(w.get("test")), kind))
+                msg = st_message(w["pair"], w["tf"], P, price, prev, ct, bool(w.get("test")), kind)
+                send(msg if ct else day_msg(w, bucket, key, msg, P))
                 print(f"  → {label} дохио илгээлээ")
                 prev = None
                 P["sent"] = True
@@ -1684,6 +1812,11 @@ def main():
                     track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, htf, htf_tf)
             except Exception as e:  # noqa: BLE001
                 print("SMC АЛДАА", key, e)
+
+    try:
+        day_sweep()
+    except Exception as e:  # noqa: BLE001
+        print("Day АЛДАА", e)
 
     ub_now = datetime.now(UB)
     week_tag = ub_now.strftime("%G-W%V")
