@@ -8,7 +8,8 @@
   "chat_roles": {
     "-1004482695939": "off",
     "-5544664828": "day",
-    "-5562831381": "swing"
+    "-5562831381": "swing",
+    "5371043257": "off"
   },
   "ct_announced": true,
   "day": {},
@@ -87,7 +88,8 @@
     "-1004482695939": "Mu, Odkoo and Mubbot",
     "-5363490041": "Mu, Odkoo and Mubbot",
     "-5544664828": "Khuleg Day",
-    "-5562831381": "Khuleg Swing"
+    "-5562831381": "Khuleg Swing",
+    "5371043257": "Mu Ba"
   },
   "orders": {
     "EURUSD|15m": {
@@ -248,7 +250,7 @@
     }
   },
   "started": true,
-  "update_offset": 291487586,
+  "update_offset": 291487587,
   "vp": {
     "SOLUSD|1h": {
       "dir": 1,
