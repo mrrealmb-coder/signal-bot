@@ -38,7 +38,7 @@
       "pair": "XAUUSD",
       "px": null,
       "sl": 3903.055786782697,
-      "status": "pending",
+      "status": "cancel",
       "tf": "5m",
       "time": 1793378700000
     },
@@ -434,7 +434,7 @@
     "XAUUSD|5m": {
       "dir": -1,
       "sent": true,
-      "status": "pending",
+      "status": "expired",
       "time": 1793378700000
     }
   },
@@ -449,11 +449,11 @@
   "st": {
     "BTCUSD|15m": {
       "dir": -1,
-      "entry": 77786.09,
+      "entry": 76725.31,
       "sent": true,
-      "sl": 78675.5251537101,
-      "status": "exit",
-      "time": 1793351700000
+      "sl": 77668.87941500486,
+      "status": "open",
+      "time": 1793385900000
     },
     "ETHUSD|15m": {
       "dir": -1,
