@@ -233,16 +233,55 @@ def http_json(url, data=None, timeout=20):
 
 # ---------------------------------------------------------------- Өгөгдөл
 
+# Binance-ийн алтны токен (XAUT, PAXG) брокерын XAU/USD-ээс хэдэн доллараар зөрдөг (2026-10-30: XAUT ≈ +2…5$).
+# Twelve Data-ийн XAU/USD спот үнээр зөрүүг 10 минут тутам хэмжээд лааны үнээс хасна → дохионы түвшин IC-ийн үнэтэй таарна.
+BASIS = {}
+
+
 def fetch_binance(sym, tf):
     last_err = None
+    off = BASIS.get(sym, 0.0)
     for host in BN_HOSTS:
         try:
             rows = http_json(f"{host}/api/v3/klines?symbol={sym}&interval={TF[tf][1]}&limit=1000")
-            return [{"h": float(r[2]), "l": float(r[3]), "c": float(r[4]), "ct": int(r[6]), "v": float(r[5]),
-                     "o": float(r[1])} for r in rows]
+            return [{"h": float(r[2]) - off, "l": float(r[3]) - off, "c": float(r[4]) - off, "ct": int(r[6]),
+                     "v": float(r[5]), "o": float(r[1]) - off} for r in rows]
         except Exception as e:  # noqa: BLE001
             last_err = e
     raise DataError(f"Binance {sym}: {last_err}")
+
+
+def gold_basis(last_fetch, minute, td_key):
+    """XAUT, PAXG − спот XAU/USD зөрүү ($). 10 минут тутам хэмжиж, хуучинтайгаа дундажлана. Алдаа гарвал хуучныг хэрэглэнэ."""
+    hit = last_fetch.get("gold_basis")
+    if hit and minute - hit["minute"] < 10:
+        return hit
+    if not td_key:
+        return hit or {}
+    try:
+        spot = float(http_json(f"https://api.twelvedata.com/price?symbol=XAU/USD&apikey={td_key}")["price"])
+        new = {"minute": minute, "spot": spot}
+        for sym in ("XAUTUSDT", "PAXGUSDT"):
+            px = None
+            for host in BN_HOSTS:
+                try:
+                    px = float(http_json(f"{host}/api/v3/ticker/price?symbol={sym}")["price"])
+                    break
+                except Exception:  # noqa: BLE001
+                    continue
+            if px is None:
+                continue
+            b = px - spot
+            if abs(b) > spot * 0.01:   # 1%-иас их зөрүү = буруу хэмжилт
+                continue
+            old = (hit or {}).get(sym)
+            new[sym] = round(b if old is None else 0.5 * old + 0.5 * b, 2)
+        print(f"Алтны зөрүү (Binance − спот {spot:.2f}): XAUT {new.get('XAUTUSDT')} · PAXG {new.get('PAXGUSDT')}")
+        last_fetch["gold_basis"] = new
+        return new
+    except Exception as e:  # noqa: BLE001
+        print("Алтны зөрүү: хэмжиж чадсангүй", e)
+        return hit or {}
 
 
 def fetch_twelve(sym, tf, key):
@@ -2195,6 +2234,9 @@ def main():
     errors, now_ms = [], int(time.time() * 1000)
     last_fetch = load_json(FETCH_FILE, {})
     minute = int(now_ms // 60000)
+    if any(w["pair"] == "XAUUSD" for w in watch):
+        gb = gold_basis(last_fetch, minute, td_key)
+        BASIS.update({k: v for k, v in gb.items() if k in ("XAUTUSDT", "PAXGUSDT") and v is not None})
     cache, td_due = {}, {}
 
     def get_daily_td(pair):
