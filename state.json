@@ -32,15 +32,15 @@
       "copy": false,
       "cut": 1793393100000,
       "dir": -1,
-      "entry": 4010.49,
+      "entry": 4002.54,
       "kind": "scalp",
       "led": "smc_s",
       "pair": "XAUUSD",
       "px": null,
-      "sl": 4015.441054923488,
+      "sl": 4009.5847197011144,
       "status": "pending",
       "tf": "5m",
-      "time": 1793322000000
+      "time": 1793325000000
     },
     "st|XAUUSD|1h": {
       "copy": false,
@@ -297,7 +297,7 @@
       "dir": -1,
       "sent": true,
       "status": "pending",
-      "time": 1793322000000
+      "time": 1793325000000
     }
   },
   "smc_announced": true,
