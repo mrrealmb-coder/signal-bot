@@ -38,7 +38,7 @@
       "pair": "XAUUSD",
       "px": null,
       "sl": 4009.5847197011144,
-      "status": "pending",
+      "status": "open",
       "tf": "5m",
       "time": 1793325000000
     },
@@ -296,7 +296,7 @@
     "XAUUSD|5m": {
       "dir": -1,
       "sent": true,
-      "status": "pending",
+      "status": "filled",
       "time": 1793325000000
     }
   },
