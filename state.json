@@ -461,7 +461,7 @@
     "XAUUSD|15m": {
       "dir": -1,
       "sent": true,
-      "status": "pending",
+      "status": "expired",
       "time": 1793380500000
     },
     "XAUUSD|1h": {
