@@ -372,11 +372,11 @@
   "st": {
     "BTCUSD|15m": {
       "dir": -1,
-      "entry": 79818.02,
-      "sent": null,
-      "sl": 80397.74359136766,
-      "status": "exit",
-      "time": 1793070000000
+      "entry": 77786.09,
+      "sent": true,
+      "sl": 78675.5251537101,
+      "status": "open",
+      "time": 1793351700000
     },
     "ETHUSD|15m": {
       "dir": -1,
