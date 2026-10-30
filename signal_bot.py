@@ -1604,12 +1604,37 @@ def ct_tag(msg, ct):
     return ("⚠️ Эсрэг · " + msg) if (ct and msg) else msg
 
 
-def record(state, method, key, r):
-    """Илгээсэн дохионы хаагдсан үр дүнг (R, спредгүй) бүртгэнэ."""
+# Пипийн хэмжээ (арилжааны түүхэнд): алт 0.1$, мөнгө 0.01$, валют 0.0001 (JPY 0.01), BTC/ETH 1$, SOL 0.01$.
+# NASDAQ 100-ийг QQQ-ийн үнээр тооцдог тул пипийн оронд хувиар (%) бичнэ.
+PIP = {"XAUUSD": 0.1, "XAGUSD": 0.01, "EURUSD": 0.0001, "AUDUSD": 0.0001, "AUDCAD": 0.0001, "USDCAD": 0.0001,
+       "USDJPY": 0.01, "CADJPY": 0.01, "BTCUSD": 1.0, "ETHUSD": 1.0, "SOLUSD": 0.01}
+HOW = {"tp": "TP", "sl": "SL", "day": "Өдрийн хаалт", "exit": "Дохиогоор хаасан", "time": "Хугацаа дууссан"}
+
+
+def record(state, method, key, r, pos=None, exit_px=None, how=None):
+    """Илгээсэн дохионы хаагдсан үр дүнг (R, спредгүй) бүртгэнэ.
+    pos (dir/entry/sl/time) ба exit_px өгвөл арилжааны түүхэнд (state["history"]) дэлгэрэнгүйг нь бичнэ."""
+    now = int(time.time() * 1000)
     led = state.setdefault("ledger", [])
-    led.append({"m": method, "k": key, "r": round(r, 2), "t": int(time.time() * 1000)})
+    led.append({"m": method, "k": key, "r": round(r, 2), "t": now})
     del led[:-2000]
     state.setdefault("ledger_start", led[0]["t"])
+    if not pos or exit_px is None or pos.get("entry") is None:
+        return
+    pair = key.split("|")[0]
+    dec = PAIRS.get(pair, {}).get("dec", 5)
+    d, e = pos["dir"], pos["entry"]
+    move = (exit_px - e) * d
+    h = {"t": now, "m": method, "k": key, "dir": "BUY" if d == 1 else "SELL", "open": pos.get("time"),
+         "entry": round(e, dec), "sl": round(pos["sl"], dec) if pos.get("sl") is not None else None,
+         "exit": round(exit_px, dec), "r": round(r, 2), "how": HOW.get(how, how or "")}
+    if pair in PIP:
+        h["pips"] = round(move / PIP[pair], 1)
+    elif e:
+        h["pct"] = round(move / e * 100, 2)
+    hist = state.setdefault("history", [])
+    hist.append(h)
+    del hist[:-2000]
 
 
 def report_text(state, now_ms, days=7):
@@ -1851,11 +1876,11 @@ def main():
     def chart_title(w, method, d):
         return f"{PAIRS[w['pair']]['name']} · {TF[w['tf']][4]} · {method} {'BUY' if d == 1 else 'SELL'}"
 
-    def day_result(m, key, t, r):
+    def day_result(m, key, t, r, exit_px=None, how=None):
         """Үндсэн позиц хаалтаас өмнө хаагдвал day-ийн үр дүн ижил."""
         d = day_open(m, key, t)
         if d:
-            record(state, d.get("led", m + "_d"), key, r)
+            record(state, d.get("led", m + "_d"), key, r, d, exit_px, how)
             d["status"] = "done"
 
     def day_fill(m, key, t, status):
@@ -1897,7 +1922,7 @@ def main():
                      f"IC Markets-ийн өдрийн хаалт (swap) ойртлоо. Day арилжаагаа {fmt_p(price, dec)} орчимд хаана уу. "
                      f"Үр дүн ≈ {r:+.1f}R\n"
                      "Swing-ээр барьж байгаа бол үндсэн дохионы хаах мэдэгдлийг хүлээнэ.", "day", also_scalp=copy)
-            record(state, d.get("led", m + "_d"), key, r)
+            record(state, d.get("led", m + "_d"), key, r, d, price, "day")
             d["status"] = "done"
             print(f"  → 📅 Day хаах {dk} {r:+.2f}R")
         for dk in [k for k, d in days.items() if d["status"] in ("done", "cancel") and now_ms - d["cut"] > 3 * 86400000]:
@@ -1929,7 +1954,9 @@ def main():
                 send(msg, "swing")
                 print(f"  → EMA {rec.get('status')} → {order['status']}")
             if rec.get("sent") and order["status"] in ("tp", "sl"):
-                record(state, "ema", key, RULES["tp_r"] if order["status"] == "tp" else -1.0)
+                record(state, "ema", key, RULES["tp_r"] if order["status"] == "tp" else -1.0,
+                       {"dir": L["dir"], "entry": order["limit"], "sl": order["sl"], "time": L["time"]},
+                       order["tp"] if order["status"] == "tp" else order["sl"], order["status"])
             rec["status"] = order["status"]
 
     def track_smc(key, w, bars, price, now_ms, step_ms, kinds, htf, htf_tf, ct=False):
@@ -1987,10 +2014,11 @@ def main():
                 print(f"  → {label} {rec.get('status')} → {S['status']}")
             if rec.get("sent") and S["status"] in ("tp", "sl"):
                 r = SMC["tp_r"] if S["status"] == "tp" else -1.0
+                xp = S["tp"] if S["status"] == "tp" else S["sl"]
                 if not scalp:   # scalp-ийн үр дүнг зөвхөн day бүртгэлээр ("smc_s") тоолно
-                    record(state, bucket + ("_t" if w.get("test") else ""), key, r)
+                    record(state, bucket + ("_t" if w.get("test") else ""), key, r, S, xp, S["status"])
                 if not ct:
-                    day_result(bucket, key, S["time"], r)
+                    day_result(bucket, key, S["time"], r, xp, S["status"])
             elif not ct:
                 day_fill(bucket, key, S["time"], S["status"])
             rec["status"] = S["status"]
@@ -2019,9 +2047,9 @@ def main():
                 prev_kind = "swing" if ct else kind_for(bucket, key, rec["time"])
                 if rec.get("sent"):
                     r = (px - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
-                    record(state, bucket, key, r)
+                    record(state, bucket, key, r, rec, px, st)
                     if not ct:
-                        day_result(bucket, key, rec["time"], r)
+                        day_result(bucket, key, rec["time"], r, px, st)
                 rec["status"] = st
         S = vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1, step=vstep)
         trend = sma_trend_fn(daily)(now_ms)
@@ -2075,9 +2103,9 @@ def main():
                 prev_kind = "swing" if ct else kind_for(bucket, key, rec["time"])
                 if rec.get("sent"):
                     r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
-                    record(state, led_m, key, r)
+                    record(state, led_m, key, r, rec, out["exit"], out["status"])
                     if not ct:
-                        day_result(bucket, key, rec["time"], r)
+                        day_result(bucket, key, rec["time"], r, out["exit"], out["status"])
                 rec["status"] = out["status"]
         P = st_signal(bars, daily, now_ms, side=-1 if ct else 1, trend=trend)
         print(f"{key}: {label} {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) + ' · ' + P['status'] if P else 'дохио алга'}")
@@ -2115,7 +2143,7 @@ def main():
                 r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
                 if rec.get("sent"):
                     send(amd_close_text(w["pair"], w["tf"], rec, out, r), "scalp")
-                    record(state, "amd_s", key, r)
+                    record(state, "amd_s", key, r, rec, out["exit"], out["status"])
                 rec["status"] = out["status"]
                 print(f"  → AMD scalp позиц хаагдлаа ({out['status']}, {r:+.2f}R)")
         P = amd_signal(bars, daily, now_ms, step_ms)
@@ -2146,7 +2174,8 @@ def main():
             if out:
                 send(ct_tag(dtc_close_text(w["pair"], w["tf"], rec, out), ct), "swing")
                 if rec.get("sent"):
-                    record(state, bucket, key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]))
+                    record(state, bucket, key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]),
+                           rec, out["exit"], out["status"])
                 rec["status"] = out["status"]
                 print(f"  → {label} позиц хаагдлаа ({out['status']})")
         S = dtc_signal(bars, daily, now_ms, side=-1 if ct else 1)
