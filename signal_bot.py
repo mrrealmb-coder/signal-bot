@@ -1676,6 +1676,52 @@ def record(state, method, key, r, pos=None, exit_px=None, how=None):
     del hist[:-2000]
 
 
+FEED_NAMES = {"smc": "🧠 SMC", "vp": "📦 VP", "amd": "⚡ AMD"}
+FEED_ACTIVE = ("pending", "filled", "open")
+
+
+def lot_size(pair_key, entry, sl):
+    """lot_lines()-тэй ижил дүрмээр лотын тоо (алтнаас бусад, эсвэл SL хэт хол бол None)."""
+    if pair_key != "XAUUSD" or not RISK["usd"] or entry is None or sl is None or entry == sl:
+        return None
+    dist = abs(entry - sl)
+    raw = RISK["usd"] / (dist * 100)
+    lots = math.floor(raw * 100 + 1e-9) / 100
+    up = math.ceil(raw * 100 - 1e-9) / 100
+    if up * dist * 100 <= 1.2 * RISK["usd"]:
+        lots = up
+    return lots if lots >= 0.01 else None
+
+
+def feed_put(state, method, key, P, status, order="market", chat="swing", now_ms=None, exit_px=None, close_time=None):
+    """BOSFib-д зориулсан цэвэр дохионы урсгал (state["feed"]["signals"]). Зөвхөн үйл явдлын үед өөрчлөгдөнө
+    (минут тутам commit үүсгэхгүйн тулд хугацааны тэмдэг зөвхөн өөрчлөлт гарах үед шинэчлэгдэнэ)."""
+    pair, tf = key.split("|")
+    dec = PAIRS.get(pair, {}).get("dec", 5)
+    rnd = (lambda x: None if x is None else round(x, dec))
+    feed = state.setdefault("feed", {"v": 1, "signals": []})
+    sid = f"{method}|{key}|{P['time']}"
+    item = next((x for x in feed["signals"] if x["id"] == sid), None)
+    if item is None:
+        item = {"id": sid, "method": method, "name": FEED_NAMES.get(method, method), "pair": pair, "tf": tf,
+                "dir": "BUY" if P["dir"] == 1 else "SELL", "order": order, "chat": chat,
+                "signal_time": P["time"], "entry": rnd(P["entry"]), "sl": rnd(P["sl"]), "tp": rnd(P.get("tp")),
+                "lots": lot_size(pair, P["entry"], P["sl"]), "expires": P.get("expires") or P.get("limit_time")}
+        feed["signals"].append(item)
+    if item.get("status") == status and exit_px is None:
+        return
+    item["status"] = status
+    item["updated"] = now_ms or int(time.time() * 1000)
+    if exit_px is not None:
+        item["exit"], item["close_time"] = rnd(exit_px), close_time or item["updated"]
+        risk = abs(P["entry"] - P["sl"])
+        if risk:
+            item["r"] = round((exit_px - P["entry"]) * P["dir"] / risk, 2)
+    # Идэвхтэй бүгд + сүүлийн 48 цагт хаагдсан, нийт ≤ 60
+    cut = item["updated"] - 48 * 3600000
+    feed["signals"] = [x for x in feed["signals"] if x["status"] in FEED_ACTIVE or x.get("updated", 0) >= cut][-60:]
+
+
 def report_text(state, now_ms, days=7):
     led = state.get("ledger", [])
     since = now_ms - days * 86400000
@@ -2036,6 +2082,9 @@ def main():
                     send(dmsg, "scalp", photo=png)
                 else:
                     send_signal(msg, dmsg, png, copy)
+                if not ct:
+                    feed_put(state, "smc", key, S, S["status"], "limit",
+                             "scalp" if scalp else ("day" if dmsg != msg else "swing"), now_ms)
                 print(f"  → {label} санаа илгээлээ")
                 state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"], "sent": True}
                 return
@@ -2051,6 +2100,9 @@ def main():
             elif msg:
                 send(msg, "swing" if ct else kind_for(bucket, key, S["time"]), also_scalp=copy and bool(dopen))
                 print(f"  → {label} {rec.get('status')} → {S['status']}")
+            if rec.get("sent") and not ct:
+                fx = (S["tp"] if S["status"] == "tp" else S["sl"]) if S["status"] in ("tp", "sl") else None
+                feed_put(state, "smc", key, S, S["status"], now_ms=now_ms, exit_px=fx, close_time=S.get("close_time"))
             if rec.get("sent") and S["status"] in ("tp", "sl"):
                 r = SMC["tp_r"] if S["status"] == "tp" else -1.0
                 xp = S["tp"] if S["status"] == "tp" else S["sl"]
@@ -2088,6 +2140,8 @@ def main():
                     r = (px - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
                     record(state, bucket, key, r, rec, px, st)
                     if not ct:
+                        feed_put(state, "vp", key, rec, st, now_ms=now_ms, exit_px=px, close_time=t_ms)
+                    if not ct:
                         day_result(bucket, key, rec["time"], r, px, st)
                 rec["status"] = st
         S = vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1, step=vstep)
@@ -2110,7 +2164,10 @@ def main():
                 ds = next((b["ct"] + 1 - step_ms for b in closed if day_key(b, step_ms) == sk), S["time"])
                 png = render_chart(closed, step_ms, chart_title(w, "Volume Profile", S["dir"]), S, "vp",
                                    {"va": S["va"], "day_start": ds, "dec": PAIRS[w["pair"]]["dec"]}, n_before=30)
-                send_signal(msg, msg if ct else day_msg(w, bucket, key, msg, S), png)
+                dmsg = msg if ct else day_msg(w, bucket, key, msg, S)
+                send_signal(msg, dmsg, png)
+                if not ct:
+                    feed_put(state, "vp", key, S, "open", "market", "day" if dmsg != msg else "swing", now_ms)
                 print(f"  → {label} дохио илгээлээ")
                 prev, sent = None, True
             state[bucket][key] = {"time": S["time"], "dir": S["dir"], "entry": S["entry"], "sl": S["sl"],
@@ -2183,6 +2240,8 @@ def main():
                 if rec.get("sent"):
                     send(amd_close_text(w["pair"], w["tf"], rec, out, r), "scalp")
                     record(state, "amd_s", key, r, rec, out["exit"], out["status"])
+                    feed_put(state, "amd", key, rec, out["status"], now_ms=now_ms, exit_px=out["exit"],
+                             close_time=out.get("close_time"))
                 rec["status"] = out["status"]
                 print(f"  → AMD scalp позиц хаагдлаа ({out['status']}, {r:+.2f}R)")
         P = amd_signal(bars, daily, now_ms, step_ms)
@@ -2199,6 +2258,7 @@ def main():
                                    | {"dec": PAIRS[w["pair"]]["dec"]}, n_before=20)
                 send(amd_message(w["pair"], w["tf"], P, price), "scalp", photo=png)
                 P["sent"] = True
+                feed_put(state, "amd", key, P, "open", "market", "scalp", now_ms)
                 print("  → AMD scalp дохио илгээлээ")
             scal[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "limit_time", "status", "sent")}
 
