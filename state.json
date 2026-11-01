@@ -42,20 +42,6 @@
       "tf": "5m",
       "time": 1793389500000
     },
-    "st|XAUUSD|1h": {
-      "copy": false,
-      "cut": 1793306700000,
-      "dir": -1,
-      "entry": 4018.56,
-      "kind": "day",
-      "led": "st_d",
-      "pair": "XAUUSD",
-      "px": null,
-      "sl": 4069.2746282395647,
-      "status": "done",
-      "tf": "1h",
-      "time": 1793275200000
-    },
     "vp|XAUUSD|1h": {
       "copy": false,
       "cut": 1793393100000,
