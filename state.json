@@ -13,50 +13,7 @@
     "5371043257": "off"
   },
   "ct_announced": true,
-  "day": {
-    "smc|XAUUSD|15m": {
-      "copy": true,
-      "cut": 1793393100000,
-      "dir": -1,
-      "entry": 3908.08,
-      "kind": "day",
-      "led": "smc_d",
-      "pair": "XAUUSD",
-      "px": null,
-      "sl": 3922.3318926824722,
-      "status": "cancel",
-      "tf": "15m",
-      "time": 1793380500000
-    },
-    "smc|XAUUSD|5m": {
-      "copy": false,
-      "cut": 1793393100000,
-      "dir": -1,
-      "entry": 3878.78,
-      "kind": "scalp",
-      "led": "smc_s",
-      "pair": "XAUUSD",
-      "px": null,
-      "sl": 3884.3790464834724,
-      "status": "done",
-      "tf": "5m",
-      "time": 1793389500000
-    },
-    "vp|XAUUSD|1h": {
-      "copy": false,
-      "cut": 1793393100000,
-      "dir": -1,
-      "entry": 3998.68,
-      "kind": "day",
-      "led": "vp_d",
-      "pair": "XAUUSD",
-      "px": "PAXGUSDT",
-      "sl": 4018.181517517693,
-      "status": "done",
-      "tf": "1h",
-      "time": 1793322000000
-    }
-  },
+  "day": {},
   "day_announced": true,
   "dtc": {
     "XAUUSD|15m": {
