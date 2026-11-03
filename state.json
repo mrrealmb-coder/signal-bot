@@ -533,6 +533,18 @@
   },
   "started": true,
   "update_offset": 291487601,
+  "va": {
+    "XAUUSD|15m": {
+      "dir": -1,
+      "end": 1793742300000,
+      "entry": 3943.19,
+      "sent": false,
+      "sl": 3950.3243733378563,
+      "status": "sl",
+      "time": 1793662200000,
+      "tp": 3888.0
+    }
+  },
   "vp": {
     "SOLUSD|1h": {
       "dir": 1,
