@@ -90,6 +90,16 @@ AMD = {"rng": (2, 7), "man": (7, 11), "sl_buf_atr": 0.1, "max_r_atr": 6.0, "min_
        "hold": 72, "fresh_bars": 2}
 
 
+# 🧪 VA 80% (Market Profile-ийн «80%-ийн дүрэм») — алт, 15 минут, туршилт. Хоёр чиглэлд (200 өдрийн шүүлтүүргүй).
+#   1) Өмнөх арилжааны өдрийн (22:00 UTC-ээс) PAXG 1 цагийн лаанаас Value Area (VP-тэй ижил value_area)
+#   2) Өнөөдөр 15 минутын лаа VA-гаас гадна хаагдсаны дараа буцаж 2 лаа дараалан VA дотор хаагдвал эсрэг тийш Market
+#   3) SL = гадагш гарсан хамгийн хол цэг + 0.1 ATR(14), TP = VA-ийн нөгөө ирмэг (доороос орвол VAH, дээрээс бол VAL)
+#   4) Эрсдэл ≤ 3 ATR, TP ≥ 0.5R. Өдөрт ганц (эхний) боломж. Арилжааны өдрийн төгсгөл / IC-ийн өдрийн хаалтаар хаана.
+# 2021-04 – 2026-10 PAXG (1 минутын дарааллаар, IC Raw зардлаар): +14R / 687 арилжаа; 2021–2023 −17R, 2023-10-аас +31R,
+# сүүлийн 12 сар +37R / 88. Чиг сул, савлагаатай зах зээлд ажилладаг (VP-ийн эсрэг горим).
+VA80 = {"need": 2, "sl_buf_atr": 0.1, "max_r_atr": 3.0, "min_tp_r": 0.5, "fresh_bars": 2}
+
+
 def ny_time(t_ms):
     from zoneinfo import ZoneInfo
     return datetime.fromtimestamp(t_ms / 1000, ZoneInfo("America/New_York"))
@@ -917,6 +927,73 @@ def amd_outcome(bars, P, now_ms):
     return {}
 
 
+def va80_signal(hbars, qbars, now_ms, step_ms=900000):
+    """Өнөөдрийн (арилжааны өдөр) хамгийн эхний VA re-entry дохио эсвэл None. hbars = 1 цаг (VA), qbars = 15 минут."""
+    closed = [b for b in qbars if b["ct"] < now_ms]
+    if len(closed) < 60:
+        return None
+    a = atr(closed, 14)
+    q = day_key(closed[-1], step_ms)
+    prev = {}
+    for b in hbars:
+        k = day_key(b, 3600000)
+        if k < q and b["ct"] < now_ms:
+            prev.setdefault(k, []).append(b)
+    if not prev:
+        return None
+    va = value_area(prev[max(prev)])
+    if not va:
+        return None
+    end = (q + 1) * 86400000 - 2 * 3600000
+    side, ext, cnt = 0, None, 0
+    for i in range(len(closed)):
+        b = closed[i]
+        if day_key(b, step_ms) != q:
+            continue
+        c = b["c"]
+        if c < va["val"]:
+            side, ext, cnt = -1, (min(ext, b["l"]) if side == -1 else b["l"]), 0
+            continue
+        if c > va["vah"]:
+            side, ext, cnt = 1, (max(ext, b["h"]) if side == 1 else b["h"]), 0
+            continue
+        if side == 0:
+            continue
+        ext = min(ext, b["l"]) if side == -1 else max(ext, b["h"])
+        cnt += 1
+        if cnt < VA80["need"]:
+            continue
+        d, e, at, t = -side, c, a[i], b["ct"] + 1
+        if math.isnan(at):
+            return None
+        sl = ext + side * VA80["sl_buf_atr"] * at
+        risk = abs(e - sl)
+        tp = va["vah"] if d == 1 else va["val"]
+        if risk <= 0 or risk > VA80["max_r_atr"] * at or (tp - e) * d < VA80["min_tp_r"] * risk:
+            return None
+        cut = day_cut(t)
+        return {"dir": d, "time": t, "entry": e, "sl": sl, "tp": tp, "va": va, "ext": ext,
+                "end": min(end, cut or end), "age": len(closed) - 1 - i, "status": "open"}
+    return None
+
+
+def va80_outcome(bars, P, now_ms):
+    """SL / TP (одоогийн хаагдаагүй лааг оруулан), эсвэл өдрийн төгсгөлд хаана."""
+    d = P["dir"]
+    for b in bars:
+        if b["ct"] + 1 <= P["time"]:
+            continue
+        if (b["l"] <= P["sl"]) if d == 1 else (b["h"] >= P["sl"]):
+            return {"status": "sl", "close_time": min(b["ct"], now_ms), "exit": P["sl"]}
+        if (b["h"] >= P["tp"]) if d == 1 else (b["l"] <= P["tp"]):
+            return {"status": "tp", "close_time": min(b["ct"], now_ms), "exit": P["tp"]}
+        if b["ct"] >= now_ms:
+            break
+        if b["ct"] + 1 >= P["end"]:
+            return {"status": "time", "close_time": b["ct"] + 1, "exit": b["c"]}
+    return {}
+
+
 # ---------------------------------------------------------------- 🧪 DTC
 
 def dtc_signal(bars, daily, now_ms, side=1):
@@ -1616,6 +1693,43 @@ def amd_close_text(pair_key, tf, rec, out, r):
             f"Үр дүн ≈ {r:+.1f}R")
 
 
+def va80_message(pair_key, tf, P, price):
+    dec = PAIRS[pair_key]["dec"]
+    d, va = P["dir"], P["va"]
+    risk = abs(P["entry"] - P["sl"])
+    rr = abs(P["tp"] - P["entry"]) / risk if risk else 0
+    lines = [
+        f"🧪 VA 80% · {'🟢 BUY' if d == 1 else '🔴 SELL'}",
+        f"{PAIRS[pair_key]['name']} · {TF[tf][4]}",
+        f"Өмнөх өдрийн Value Area: VAL {fmt_p(va['val'], dec)} · POC {fmt_p(va['poc'], dec)} · VAH {fmt_p(va['vah'], dec)}",
+        f"Үнэ VA-гаас {'доош' if d == 1 else 'дээш'} гарч ({fmt_p(P['ext'], dec)} хүрээд) буцаж {VA80['need']} лаа дотор "
+        f"хаагдлаа · {fmt_time(P['time'])}",
+        "",
+        f"Оролт (Market): {fmt_p(P['entry'], dec)}",
+        f"SL: {fmt_p(P['sl'], dec)}  ({'−' if d == 1 else '+'}{fmt_p(risk, dec)})",
+        f"TP ({'VAH' if d == 1 else 'VAL'}): {fmt_p(P['tp'], dec)}  ({'+' if d == 1 else '−'}{fmt_p(abs(P['tp'] - P['entry']), dec)} · {rr:.1f}R)",
+        f"Хаах: TP/SL-д хүрэхгүй бол {fmt_time(P['end'])}-д (өдрийн хаалт) хаана.",
+        f"Одоогийн үнэ: {fmt_p(price, dec)}",
+        "🧪 Туршилт: савлагаатай зах зээлд зориулсан, 200 өдрийн чигээс үл хамааран BUY/SELL хоёуланд гарна. "
+        "5.5 жилд нийт ≈ +14R (2021–2023 алдагдалтай, сүүлийн 12 сар +37R). Бодит үр дүнг 1 сар ажиглана.",
+    ]
+    lines += lot_lines(pair_key, P["entry"], P["sl"])
+    lines += ["", chart_link(pair_key, tf), "Автомат техник дохио. Санхүүгийн зөвлөгөө биш."]
+    return "\n".join(lines)
+
+
+def va80_close_text(pair_key, tf, rec, out, r):
+    dec = PAIRS[pair_key]["dec"]
+    h = head(pair_key, tf, rec["dir"])
+    t = fmt_time(out["close_time"])[-5:]
+    if out["status"] == "tp":
+        return f"🧪 🎯 VA 80% TP хүрсэн · {h}\nTP {fmt_p(out['exit'], dec)} ({t}). Ашиг ≈ {r:+.1f}R"
+    if out["status"] == "sl":
+        return f"🧪 🛑 VA 80% SL цохисон · {h}\nSL {fmt_p(out['exit'], dec)} ({t}). Алдагдал ≈ −1R"
+    return (f"🧪 ⌛ VA 80% хаах · {h}\nӨдрийн хаалт ойртлоо, TP/SL-д хүрээгүй тул {fmt_p(out['exit'], dec)} орчимд "
+            f"хаана уу ({t}). Үр дүн ≈ {r:+.1f}R")
+
+
 def dtc_close_text(pair_key, tf, rec, out):
     dec = PAIRS[pair_key]["dec"]
     h = head(pair_key, tf, rec["dir"])
@@ -1634,7 +1748,7 @@ METHOD_NAMES = {"ema": "📊 EMA", "smc": "🧠 SMC", "vp": "📦 VP", "st": "�
                 "smc_ct": "⚠️ SMC эсрэг", "vp_ct": "⚠️ VP эсрэг", "st_ct": "⚠️ Supertrend эсрэг",
                 "dtc_ct": "⚠️ DTC эсрэг", "st_t": "🧪 Supertrend", "smc_t": "🧪 SMC",
                 "smc_d": "📅 SMC day", "vp_d": "📅 VP day", "st_d": "📅 Supertrend day", "amd_s": "⚡ AMD scalp",
-                "smc_s": "🧪 SMC scalp"}
+                "smc_s": "🧪 SMC scalp", "va_t": "🧪 VA 80%"}
 # "_t" төгсгөлтэй арга = 🧪 туршилтын хослол (config-д "test": true), "_s" = ⚡ Scalp. Тайланд тусад нь тоолно.
 
 
@@ -1676,7 +1790,7 @@ def record(state, method, key, r, pos=None, exit_px=None, how=None):
     del hist[:-2000]
 
 
-FEED_NAMES = {"smc": "🧠 SMC", "vp": "📦 VP", "amd": "⚡ AMD"}
+FEED_NAMES = {"smc": "🧠 SMC", "vp": "📦 VP", "amd": "⚡ AMD", "va": "🧪 VA 80%"}
 FEED_ACTIVE = ("pending", "filled", "open")
 
 
@@ -2262,6 +2376,46 @@ def main():
                 print("  → AMD scalp дохио илгээлээ")
             scal[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "limit_time", "status", "sent")}
 
+    def track_va80(key, w, now_ms):
+        """🧪 VA 80%: PAXG 1 цаг (VA) + PAXG 15 минут (дохио), зах зээлийн цагаар шүүнэ. Day чатад илгээнэ."""
+        if ("vp_1h", VP["sym"]) not in cache:
+            raw = fetch_binance(VP["sym"], "1h")
+            cache[("vp_1h", VP["sym"])] = [b for b in raw if market_open(b["ct"] + 1 - 3600000)]
+        if ("va_15m", VP["sym"]) not in cache:
+            raw = fetch_binance(VP["sym"], "15m")
+            cache[("va_15m", VP["sym"])] = [b for b in raw if market_open(b["ct"] + 1 - 900000)]
+        hb, qb = cache[("vp_1h", VP["sym"])], cache[("va_15m", VP["sym"])]
+        vs = state.setdefault("va", {})
+        rec = vs.get(key)
+        if rec and rec.get("status") == "open":
+            out = va80_outcome(qb, rec, now_ms)
+            if out:
+                r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
+                if rec.get("sent"):
+                    send(va80_close_text(w["pair"], w["tf"], rec, out, r), "day")
+                    record(state, "va_t", key, r, rec, out["exit"], out["status"])
+                    feed_put(state, "va", key, rec, out["status"], now_ms=now_ms, exit_px=out["exit"],
+                             close_time=out.get("close_time"))
+                rec["status"] = out["status"]
+                print(f"  → VA 80% позиц хаагдлаа ({out['status']}, {r:+.2f}R)")
+        P = va80_signal(hb, qb, now_ms)
+        print(f"{key}: 🧪 VA 80% {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) if P else 'дохио алга'}")
+        if P and (not rec or rec.get("time") != P["time"]) and not (rec and rec.get("status") == "open"):
+            P.update(va80_outcome(qb, P, now_ms))
+            P["sent"] = False
+            if P["age"] > VA80["fresh_bars"] or P["status"] != "open":
+                print("  (хуучин эсвэл аль хэдийн хаагдсан тул илгээхгүй, зөвхөн тэмдэглэв)")
+            else:
+                closed = [b for b in qb if b["ct"] < now_ms]
+                ds = (day_key(closed[-1], 900000)) * 86400000 - 2 * 3600000
+                png = render_chart(closed, 900000, chart_title(w, "VA 80%", P["dir"]), P, "vp",
+                                   {"va": P["va"], "day_start": ds, "dec": PAIRS[w["pair"]]["dec"]}, n_before=40)
+                send(va80_message(w["pair"], w["tf"], P, closed[-1]["c"]), "day", photo=png)
+                P["sent"] = True
+                feed_put(state, "va", key, P, "open", "market", "day", now_ms)
+                print("  → 🧪 VA 80% дохио илгээлээ")
+            vs[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "end", "status", "sent")}
+
     def track_dtc(key, w, bars, now_ms, ct=False):
         bucket = "dtc_ct" if ct else "dtc"
         label = "DTC эсрэг" if ct else "DTC"
@@ -2394,6 +2548,11 @@ def main():
                 track_amd(key, w, bars, now_ms)
             except Exception as e:  # noqa: BLE001
                 print("AMD АЛДАА", key, e)
+        if w.get("va80") and pair == "XAUUSD":
+            try:
+                track_va80(key, w, now_ms)
+            except Exception as e:  # noqa: BLE001
+                print("VA 80% АЛДАА", key, e)
         ct_on = bool(config.get("counter_trend")) and w.get("ct", True)
         sides = (False, True) if ct_on else (False,)
         for ct in sides:
