@@ -2377,7 +2377,7 @@ def main():
             scal[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "limit_time", "status", "sent")}
 
     def track_va80(key, w, now_ms):
-        """🧪 VA 80%: PAXG 1 цаг (VA) + PAXG 15 минут (дохио), зах зээлийн цагаар шүүнэ. Day чатад илгээнэ."""
+        """🧪 VA 80%: PAXG 1 цаг (VA) + PAXG 15 минут (дохио), зах зээлийн цагаар шүүнэ. ⚡ Scalp чатад илгээнэ."""
         if ("vp_1h", VP["sym"]) not in cache:
             raw = fetch_binance(VP["sym"], "1h")
             cache[("vp_1h", VP["sym"])] = [b for b in raw if market_open(b["ct"] + 1 - 3600000)]
@@ -2392,7 +2392,7 @@ def main():
             if out:
                 r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
                 if rec.get("sent"):
-                    send(va80_close_text(w["pair"], w["tf"], rec, out, r), "day")
+                    send(va80_close_text(w["pair"], w["tf"], rec, out, r), "scalp")
                     record(state, "va_t", key, r, rec, out["exit"], out["status"])
                     feed_put(state, "va", key, rec, out["status"], now_ms=now_ms, exit_px=out["exit"],
                              close_time=out.get("close_time"))
@@ -2410,9 +2410,9 @@ def main():
                 ds = (day_key(closed[-1], 900000)) * 86400000 - 2 * 3600000
                 png = render_chart(closed, 900000, chart_title(w, "VA 80%", P["dir"]), P, "vp",
                                    {"va": P["va"], "day_start": ds, "dec": PAIRS[w["pair"]]["dec"]}, n_before=40)
-                send(va80_message(w["pair"], w["tf"], P, closed[-1]["c"]), "day", photo=png)
+                send(va80_message(w["pair"], w["tf"], P, closed[-1]["c"]), "scalp", photo=png)
                 P["sent"] = True
-                feed_put(state, "va", key, P, "open", "market", "day", now_ms)
+                feed_put(state, "va", key, P, "open", "market", "scalp", now_ms)
                 print("  → 🧪 VA 80% дохио илгээлээ")
             vs[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "end", "status", "sent")}
 
