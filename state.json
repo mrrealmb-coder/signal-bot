@@ -344,6 +344,18 @@
   "ledger_start": 1793195530901,
   "mk2_announced": true,
   "mk3_announced": true,
+  "movement_watch": {
+    "XAUUSD|15m": {
+      "evaluated_at": 1793802968660,
+      "initialized_at": 1793802968660,
+      "last_by_direction": {},
+      "pending": {},
+      "receipts": {},
+      "status": "initialized",
+      "version": "movement-watch-v1",
+      "watermark": 1793802600000
+    }
+  },
   "names": {
     "-1004482695939": "Mu, Odkoo and Mubbot",
     "-5078732888": "Scalp",
