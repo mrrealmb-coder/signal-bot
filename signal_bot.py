@@ -27,6 +27,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from movement_watch import run_watch, active_recipients
+from entry_live import run_entry
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(HERE, "state.json")
@@ -254,9 +255,11 @@ def fetch_binance(sym, tf):
     off = BASIS.get(sym, 0.0)
     for host in BN_HOSTS:
         try:
+            snapshot_at = int(time.time() * 1000)
             rows = http_json(f"{host}/api/v3/klines?symbol={sym}&interval={TF[tf][1]}&limit=1000")
             return [{"h": float(r[2]) - off, "l": float(r[3]) - off, "c": float(r[4]) - off, "ct": int(r[6]),
-                     "v": float(r[5]), "o": float(r[1]) - off} for r in rows]
+                     "v": float(r[5]), "o": float(r[1]) - off,
+                     "_source": f"binance:{sym}", "_basis": off, "_snapshot_at": snapshot_at} for r in rows]
         except Exception as e:  # noqa: BLE001
             last_err = e
     raise DataError(f"Binance {sym}: {last_err}")
@@ -1955,6 +1958,67 @@ def movement_status(state, key):
     return text
 
 
+def entry_message(kind, plan):
+    side = 'BUY STOP' if plan['direction'] == 1 else 'SELL STOP'
+    title = f"🧪 XAUUSD · 15м · {side} · Breakout v1"
+    levels = f"Entry: {plan['entry']:.2f}\nSL: {plan['sl']:.2f}\nTP: {plan['tp']:.2f} (2R)"
+    if kind == 'setup':
+        daily = plan.get('daily_direction')
+        context = ('\n⚠️ Өдрийн чигийн эсрэг богино хугацааны дохио.'
+                   if daily in (-1, 1) and daily != plan['direction'] else '')
+        return (f"{title}\n{levels}\n"
+                f"Лот: {plan['lots']:.2f} · SL + тооцсон зардал ≈ ${plan['modeled_risk_usd']:.2f}\n"
+                f"Идэвхжих: {fmt_time(plan['publish_at'])} (УБ)\n"
+                f"Оролт хүчинтэй: {fmt_time(plan['expires'])} хүртэл (УБ)\n"
+                "Идэвхжихээс өмнө Entry эсвэл SL-д хүрвэл хүчингүй. Идэвхжсэний дараа Entry-ээс өмнө SL-д хүрвэл цуцална.\n"
+                "Оролт хүрснээс хойш дээд тал нь 6 цаг; захын амралтаас өмнө хаана. Хоцорсон оролтыг бүү хөө."
+                f"{context}\nҮнийн эх: XAUT → спотын зөрүүгээр зассан; брокерын үнэ зөрж болно.\n"
+                "Туршилтын дохио. Лотын тооцоо 100 унц/лот, $0.60/унц зардалтай; гулсалт нэмэгдэж болно.\n"
+                f"ID: {plan['id']}")
+    if kind == 'filled':
+        return (f"{title}\n🟢 Үнэ оролтын түвшинд хүрсэн (ботын өгөгдлөөр).\n{levels}\n"
+                f"Тооцоолсон оролт: {plan['fill']:.2f}\n"
+                f"Хугацаагаар хаах: {fmt_time(plan['hold_until'])} (УБ), эсвэл захын амралтаас өмнө.\n"
+                f"Энэ нь брокерын fill баталгаа биш.\nID: {plan['id']}")
+    labels = {'tp': '✅ TP түвшинд хүрсэн', 'sl': '🔴 SL түвшинд хүрсэн',
+              'time_exit': '⏰ Хугацаагаар хаах', 'expired': '⌛ Оролтын хугацаа дууссан — цуцлах',
+              'cancelled': '❌ Entry-ээс өмнө SL хүрсэн — цуцлах',
+              'crossed_before_publication': '❌ Идэвхжихээс өмнө түвшин хүрсэн — дохио хүчингүй',
+              'cancelled_market_close': '❌ Захын амралт — хүлээгдэж буй оролтыг цуцлах',
+              'market_closed': '⚠️ Зах хаалттай — брокерын төлөвийг шалгах',
+              'data_gap': '⚠️ Өгөгдөл тасарсан — SL/TP дарааллыг батлах боломжгүй, брокерын төлөвийг шалгах',
+              'ambiguous_entry_sl': '⚠️ Entry ба SL нэг минутанд хүрсэн — дараалал тодорхойгүй',
+              'ambiguous_sl_tp': '⚠️ SL ба TP нэг минутанд хүрсэн — дараалал тодорхойгүй'}
+    extra = (f"\nГарах үнэ: {plan['exit']:.2f} · зардлын өмнөх хөдөлгөөн {plan['gross_pips']:+.1f} pip"
+             if 'exit' in plan else '')
+    return (f"{title}\n{labels.get(plan['status'], plan['status'])}\n{levels}{extra}\n"
+            f"Үнийн өгөгдлөөр тооцсон; брокерын бодит гүйцэтгэл биш.\nID: {plan['id']}")
+
+
+def entry_status(slot, now_ms):
+    if not slot:
+        return '🧪 Breakout Entry/SL/TP: анхны шалгалт хүлээж байна.'
+    labels = {'initialized': 'шинэ дохио хүлээж байна', 'no_break': 'бүтцийн шинэ сэтлэлт алга',
+              'weak_break': 'сэтлэлтийн хүч хүрээгүй', 'cooldown': 'ижил чигийн завсарлага',
+              'basis_stale': 'спот үнийн зөрүү хуучирсан тул шинэ дохиог түр зогсоосон',
+              'late_detection': 'шинэ дохиог цагт нь илгээх цонх өнгөрсөн',
+              'risk_distance': 'SL-ийн зай тохироогүй', 'minimum_lot_over_budget': 'хамгийн бага лот эрсдэлийн төсвөөс их',
+              'crossed_before_publication': 'илгээхээс өмнө Entry/SL хүрсэн',
+              'missing_current_quote': 'одоогийн минутын үнэ баталгаажаагүй', 'disabled': 'унтраалттай'}
+    plan = slot.get('active')
+    text = f"🧪 Breakout Entry/SL/TP: {labels.get(slot.get('status'), slot.get('status', 'шалгаж байна'))}"
+    if now_ms - slot.get('evaluated_at', slot.get('initialized_at', 0)) > 180000:
+        text += '\n⚠️ Шалгалтын төлөв хуучирсан.'
+    if slot.get('last_error', {}).get('at', 0) >= slot.get('evaluated_at', 0):
+        text += '\n⚠️ Сүүлийн шалгалт алдаатай.'
+    if plan:
+        text += (f"\n{'BUY STOP' if plan['direction'] == 1 else 'SELL STOP'} · {plan['status']}"
+                 f"\nEntry {plan['entry']:.2f} · SL {plan['sl']:.2f} · TP {plan['tp']:.2f}"
+                 f"\nTelegram баталгаажсан: {len(plan.get('delivered_to', {}))} чат"
+                 f"\nОролтын хугацаа: {fmt_time(plan['expires'])} (УБ)")
+    return text
+
+
 def update_text(config, state, now_ms, inspect):
     """Хүсэлт гарсан үеийн өгөгдлөөр төлөвийг тайлбарлана; дохио илгээх/төлөв солихгүй."""
     names = {"smc": "🧠 SMC", "vp": "📦 Volume Profile", "amd": "⚡ AMD", "va80": "🧪 VA 80%",
@@ -1971,6 +2035,8 @@ def update_text(config, state, now_ms, inspect):
         out += ["", f"{PAIRS[pair]['name']} · {TF[tf][4]}"]
         if w.get('movement_watch') and pair == 'XAUUSD' and tf == '15m':
             out.append(movement_status(state, f'{pair}|{tf}'))
+        if w.get('entry_plan') and pair == 'XAUUSD' and tf == '15m':
+            out.append(entry_status(state.get('entry_plans', {}).get(f'{pair}|{tf}', {}), now_ms))
         if PAIRS[pair].get("weekend_closed") and not market_open(now_ms):
             out.append("ℹ️ Зах зээлийн амралтын цаг. Шинэ брокерын лаа хүлээж байна.")
         methods = [m for m in names if w.get(m, m in ("ema", "smc"))]
@@ -2634,6 +2700,31 @@ def main():
                 errors.append(str(e))
             print("АЛДАА", key, e)
             continue
+        entry_slot = state.get('entry_plans', {}).get(key, {})
+        if pair == 'XAUUSD' and tf == '15m' and (w.get('entry_plan') or entry_slot.get('active') or entry_slot.get('outbox')):
+            entry_slot = state.setdefault('entry_plans', {}).setdefault(key, {})
+            try:
+                entry_now = int(time.time() * 1000)
+                try:
+                    daily_direction = sma_trend_fn(get_daily_for(pair))(entry_now)
+                except Exception:
+                    daily_direction = None
+                minute_bars = fetch_binance('XAUTUSDT', '1m')
+                basis_record = last_fetch.get('gold_basis', {})
+                status = run_entry(entry_slot, bars, minute_bars, int(time.time() * 1000),
+                                   active_recipients(chats, roles),
+                                   lambda cid, kind, plan: http_json(
+                                       f'https://api.telegram.org/bot{token}/sendMessage',
+                                       data=dict(chat_id=cid, text=entry_message(kind, plan), disable_web_page_preview='true'), timeout=5),
+                                   lambda: save_state(state), atr_fn=atr, ema_fn=ema, market_open=market_open,
+                                   basis=BASIS.get('XAUTUSDT', 0),
+                                   basis_fresh=('XAUTUSDT' in basis_record and 0 <= minute - basis_record.get('minute', -100000) <= 15),
+                                   risk_usd=RISK['usd'], daily_direction=daily_direction,
+                                   enabled=bool(w.get('entry_plan')), clock_ms=lambda: int(time.time() * 1000))
+                print(f"Entry {key}: {status} · bar={entry_slot.get('watermark')} · active={bool(entry_slot.get('active'))}")
+            except Exception as e:
+                entry_slot['last_error'] = {'at': int(time.time() * 1000), 'type': type(e).__name__}
+                print('ENTRY АЛДАА', key, type(e).__name__)
         if w.get('movement_watch') and pair == 'XAUUSD' and tf == '15m':
             try:
                 closed = [b for b in bars if b['ct'] < now_ms]

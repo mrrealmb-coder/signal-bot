@@ -1,10 +1,10 @@
-name: Movement watch tests
+name: Signal delivery and entry tests
 on:
   push:
-    branches: [main, codex/movement-watch-live]
-    paths: [signal_bot.py, movement_watch.py, config.json, test_update.py, test_movement_watch.py, .github/workflows/movement-tests.yml]
+    branches: [main, codex/movement-watch-live, codex/entry-sl-tp]
+    paths: [signal_bot.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
   pull_request:
-    paths: [signal_bot.py, movement_watch.py, config.json, test_update.py, test_movement_watch.py, .github/workflows/movement-tests.yml]
+    paths: [signal_bot.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
 permissions:
   contents: read
 jobs:
@@ -16,4 +16,4 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m unittest -q test_update.py test_movement_watch.py
+      - run: python -m unittest -q test_update.py test_movement_watch.py test_entry_plans.py
