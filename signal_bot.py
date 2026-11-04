@@ -1055,6 +1055,7 @@ def tg(token, method, **params):
 
 
 WELCOME = ("👋 Сайн байна уу! Энэ чатад алтны 📦 VP, 🧠 SMC, NASDAQ-ийн 📈 Supertrend дохио ирнэ.\n"
+           "Одоогийн төлөв: /update\n"
            "Мэдэгдэл зогсоох бол /stop гэж бичнэ үү.")
 
 
@@ -1157,6 +1158,14 @@ def sync_chats(token, state):
             cid = str(chat["id"])
             sender = str((m.get("from") or {}).get("id", ""))
             p0 = text.split()[0].split("@")[0] if text else ""
+            if p0 == "/update":
+                if cid in chats or cid == state.get("owner"):
+                    requests = state.setdefault("update_requests", [])
+                    if cid not in requests:
+                        requests.append(cid)
+                else:
+                    try_send(token, cid, "🔒 /update: эзэмшигчийн зөвшөөрсөн чатад ашиглана. /start гэж хүсэлт илгээнэ үү.")
+                continue
             if sender == state.get("owner") and p0 in ROLE_TEXT:
                 # Эзэмшигч тухайн чатын үүргийг тохируулна (Swing / Day групп)
                 roles = state.setdefault("chat_roles", {})
@@ -1914,6 +1923,58 @@ def load_json(path, default):
         return default
 
 
+def update_text(config, state, now_ms, inspect):
+    """Хүсэлт гарсан үеийн өгөгдлөөр төлөвийг тайлбарлана; дохио илгээх/төлөв солихгүй."""
+    names = {"smc": "🧠 SMC", "vp": "📦 Volume Profile", "amd": "⚡ AMD", "va80": "🧪 VA 80%",
+             "ema": "📊 EMA", "st": "📈 Supertrend", "dtc": "🧪 DTC"}
+    labels = {"pending": "⏳ Limit хүлээгдэж байна", "filled": "🟢 Limit хүрсэн (тооцоолсон)",
+              "open": "🟢 Дохио нээлттэй (тооцоолсон)", "tp": "өмнөх дохио TP хүрсэн",
+              "sl": "өмнөх дохио SL хүрсэн", "expired": "өмнөх Limit-ийн хугацаа дууссан",
+              "skip": "SL-ийн зайн шүүлтүүрт тэнцээгүй", "time": "өмнөх дохионы хугацаа дууссан"}
+    out = [f"📍 Одоогийн төлөв · {fmt_time(now_ms)} (УБ)"]
+    for w in config.get("watch", []):
+        if w.get("pair") not in PAIRS or w.get("tf") not in TF:
+            continue
+        pair, tf = w["pair"], w["tf"]
+        out += ["", f"{PAIRS[pair]['name']} · {TF[tf][4]}"]
+        if PAIRS[pair].get("weekend_closed") and not market_open(now_ms):
+            out.append("ℹ️ Зах зээлийн амралтын цаг. Шинэ брокерын лаа хүлээж байна.")
+        methods = [m for m in names if w.get(m, m in ("ema", "smc"))]
+        for method in methods:
+            try:
+                bars, P, direction = inspect(w, method)
+                if not bars:
+                    raise DataError("лааны өгөгдөл алга")
+                bar = bars[-1]
+                if now_ms - bar["ct"] > 2 * TF[tf][0] * 1000:
+                    out.append(f"{names[method]}: ⚠️ Өгөгдөл хуучирсан · сүүлийн лаа {fmt_time(bar['ct'])}. Одоогийн дохиог батлахгүй.")
+                    continue
+                out.append(f"{names[method]} · үнэ ≈ {fmt_p(bar['c'], PAIRS[pair]['dec'])}")
+                closed = [b for b in bars if b["ct"] < now_ms]
+                if closed:
+                    out.append(f"• Сүүлийн хаагдсан лаа: {fmt_time(closed[-1]['ct'] + 1)} (УБ)")
+                if direction is not None:
+                    out.append("• 200 өдрийн чиг: " + ("өсөх ↑" if direction == 1 else "буурах ↓" if direction == -1 else "өгөгдөл хүрэлцэхгүй"))
+                if not P:
+                    out.append("• Шинэ дохио гараагүй — аргын оролтын нөхцөл, чигийн шүүлтүүр бүрдээгүй.")
+                    continue
+                status = P.get("status", "open")
+                if method in ("vp", "amd", "va80") and P.get("age", 0) > 2 and status == "open":
+                    out.append(f"• Өмнөх боломж: {fmt_time(P['time'])}. Шинэ дохио биш; одоо оролт санал болгохгүй.")
+                    continue
+                out.append(f"• {labels.get(status, status)} · {'BUY' if P['dir'] == 1 else 'SELL'} · {fmt_time(P['time'])}")
+                if status in ("open", "filled", "pending"):
+                    out.append("• Entry {0} · SL {1} · TP {2}".format(
+                        *(fmt_p(P.get(k), PAIRS[pair]['dec']) if P.get(k) is not None else "—" for k in ("entry", "sl", "tp"))))
+                else:
+                    out.append("• Одоогоор шинэ идэвхтэй дохио алга.")
+            except Exception as e:  # noqa: BLE001
+                print("UPDATE АЛДАА", pair, tf, method, type(e).__name__)
+                out.append(f"{names[method]}: ⚠️ Өгөгдөл/тооцооллын алдаа. Энэ аргын төлөвийг баталж чадсангүй.")
+    out += ["", "Энэ нь үнийн өгөгдлөөр тооцсон төлөв; MT5-ийн бодит захиалга, fill биш."]
+    return "\n".join(out)
+
+
 def main():
     token = os.environ.get("TELEGRAM_TOKEN", "").strip()
     td_key = os.environ.get("TWELVEDATA_KEY", "").strip()
@@ -1931,6 +1992,7 @@ def main():
     state.pop("sent", None)
 
     sync_chats(token, state)
+    update_requests = state.pop("update_requests", [])
     chats = state["chat_ids"]
     if not chats:
         print("Хүлээн авагч алга. Telegram дээр ботдоо /start гэж бичээд дахин ажиллуулна уу.")
@@ -2596,6 +2658,65 @@ def main():
         day_sweep()
     except Exception as e:  # noqa: BLE001
         print("Day АЛДАА", e)
+
+    if update_requests:
+        def inspect_update(w, method):
+            pair, tf = w["pair"], w["tf"]
+            step = TF[tf][0] * 1000
+            bars = get_bars(pair, tf)
+            if method in ("vp", "va80"):
+                sym = VP["sym"] if pair == "XAUUSD" else PAIRS[pair]["sym"]
+                def profile_bars(interval):
+                    key = ("vp_1h" if interval == "1h" else "va_15m", sym)
+                    if key not in cache:
+                        raw = fetch_binance(sym, interval)
+                        cache[key] = [b for b in raw if market_open(b["ct"] + 1 - TF[interval][0] * 1000)] if pair == "XAUUSD" else raw
+                    return cache[key]
+                hb = profile_bars("1h")
+                if method == "va80":
+                    bars = profile_bars("15m")
+                    P = va80_signal(hb, bars, now_ms)
+                    if P:
+                        P.update(va80_outcome(bars, P, now_ms))
+                else:
+                    bars = hb
+                    P = state.get("vp", {}).get(f"{pair}|{tf}")
+                    if P and P.get("status") == "open":
+                        P = dict(P)
+                    else:
+                        P = vp_signal(bars, get_daily_for(pair), now_ms, step, step=PAIRS[pair].get("vp_step"))
+                    if P:
+                        P = dict(P)
+                        P["status"] = vp_outcome(bars, P, now_ms)[0]
+            elif method == "smc":
+                htf = htf_trend_fn(get_bars(pair, w["smc_htf"]), now_ms) if w.get("smc_htf") else None
+                if w.get("smc_sma"):
+                    sma, base = sma_trend_fn(get_daily_for(pair)), htf
+                    htf = lambda t: sma(t) if base is None or base(t) == sma(t) else 0
+                P = smc_setup(bars, now_ms, step, tuple(w.get("smc_kinds", ["BOS", "CHoCH"])), htf,
+                              float(w.get("smc_min_risk", 0)))
+            elif method == "amd":
+                P = state.get("scalp", {}).get(f"{pair}|{tf}")
+                P = dict(P) if P and P.get("status") == "open" else amd_signal(bars, get_daily_for(pair), now_ms, step)
+                if P:
+                    P.update(amd_outcome(bars, P, now_ms))
+            elif method == "ema":
+                P = analyze(bars, now_ms).get("last")
+                if P:
+                    P = dict(P, **limit_order(bars, P, now_ms, step))
+            elif method == "st":
+                trend = ema_trend_fn(get_bars(pair, "4h"), now_ms) if w.get("st_trend") == "4h_ema50" else None
+                P = st_signal(bars, None if trend else get_daily_for(pair), now_ms, trend=trend)
+            else:
+                P = dtc_signal(bars, get_daily_for(pair), now_ms)
+            direction = sma_trend_fn(get_daily_for(pair))(now_ms) if method in ("smc", "vp", "amd") else None
+            return bars, P, direction
+
+        reply = update_text(config, state, now_ms, inspect_update)
+        for cid in update_requests:
+            # Команд ирсэн чатад л хариулна; бусад чатад мэдэгдэл түгээхгүй.
+            for start in range(0, len(reply), 3500):
+                try_send(token, cid, reply[start:start + 3500])
 
     ub_now = datetime.now(UB)
     week_tag = ub_now.strftime("%G-W%V")
