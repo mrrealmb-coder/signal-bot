@@ -37,3 +37,20 @@ Deployment gate: unit tests are necessary but do not establish a useful strategy
 Do not enable the candidate if the chronological replay has negative aggregate
 net R under both cost assumptions. Even a passing result is experimental and
 requires forward observation; historical results do not establish live returns.
+
+## Live timing clarification (after initial replay, no level/risk parameter changes)
+
+The replay's `publish_at = signal close + 60s` is the **activation** boundary.
+Live sends a conditional setup before that boundary, with the activation time
+printed prominently. If Entry/SL is touched during the first minute, the setup
+is cancelled and no paper entry is counted. Such a cancellation may follow a
+previously delivered conditional setup. The internal result name remains
+`crossed_before_publication` for compatibility with the frozen replay output.
+Already-crossed levels at the live quote are never sent as a new setup. No new
+setup is queued after close+45s, and delivery attempts stop at close+50s.
+Failed recipients are not sent a stale setup after activation.
+
+Live prices use Binance XAUT with a recently measured spot offset (<=15min).
+The offset is frozen per plan; later updates are normalized back to that offset
+for tracking. This is still a proxy, not a broker bid/ask feed. Missing or mixed
+sources block new plans; missing minutes produce an unknown outcome, not a win.

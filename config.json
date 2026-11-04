@@ -7,6 +7,7 @@
       "pair": "XAUUSD",
       "tf": "15m",
       "movement_watch": false,
+      "entry_plan": true,
       "ema": false,
       "smc": true,
       "smc_kinds": [
