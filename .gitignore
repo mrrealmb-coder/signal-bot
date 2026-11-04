@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 state.json.tmp
 live_test_results/
+entry_results/
