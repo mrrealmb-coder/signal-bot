@@ -1,0 +1,19 @@
+name: Movement watch tests
+on:
+  push:
+    branches: [main, codex/movement-watch-live]
+    paths: [signal_bot.py, movement_watch.py, config.json, test_update.py, test_movement_watch.py, .github/workflows/movement-tests.yml]
+  pull_request:
+    paths: [signal_bot.py, movement_watch.py, config.json, test_update.py, test_movement_watch.py, .github/workflows/movement-tests.yml]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest -q test_update.py test_movement_watch.py

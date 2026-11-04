@@ -26,6 +26,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from movement_watch import run_watch, active_recipients
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(HERE, "state.json")
@@ -1923,6 +1924,37 @@ def load_json(path, default):
         return default
 
 
+def movement_message(event):
+    direction = event['direction']
+    trend = event.get('daily_direction')
+    daily = 'өсөх ↑' if trend == 1 else 'буурах ↓' if trend == -1 else 'өгөгдөл хүрэлцэхгүй'
+    agreement = ' — ойрын хөдөлгөөнтэй зөрж байна' if trend in (-1, 1) and trend != direction else ''
+    return (f"👀 ХӨДӨЛГӨӨНИЙ МЭДЭГДЭЛ · Алт · 15 минут\n"
+            f"{'⬆️ Өсөх' if direction == 1 else '⬇️ Буурах'} бүтэц · {event['kind']}\n"
+            f"Баталгаажсан лаа: {fmt_time(event['time'])} (УБ)\n"
+            f"Лааны хаалтын үнэ ≈ {fmt_p(event['reference'], 2)}\n"
+            f"200 өдрийн чиг: {daily}{agreement}\n\n"
+            "Энэ нь ойрын хөдөлгөөний мэдэгдэл. Оролт, SL/TP баталгаажаагүй; шууд оролтын заавар биш.")
+
+
+def movement_status(state, key):
+    slot = state.get('movement_watch', {}).get(key)
+    if not slot:
+        return '👀 Хөдөлгөөний хяналт: асаалттай · анхны шалгалт хүлээж байна.'
+    labels = {'initialized': 'шинэ хаагдсан лаа хүлээж байна', 'no_break': 'шинэ бүтцийн эвдрэл алга',
+              'weak_break': 'эвдрэл гарсан ч хүчний нөхцөл бүрдээгүй', 'cooldown': 'ижил чиглэлийн давталтыг хязгаарлав',
+              'stale_bar': 'лааны өгөгдөл хоцорсон', 'queued': 'хөдөлгөөн илэрсэн', 'no_recipients': 'идэвхтэй хүлээн авагч алга'}
+    text = f"👀 Хөдөлгөөний хяналт: {labels.get(slot.get('status'), 'шалгаж байна')}"
+    text += f" · сүүлийн лаа {fmt_time(slot['watermark'])} (УБ)."
+    last = slot.get('last_alert')
+    if last:
+        text += (f"\n• Сүүлийн мэдэгдэл: {fmt_time(last['time'])} · {'өсөх' if last['direction'] == 1 else 'буурах'}"
+                 f" · хүргэлтийн баталгаа {last['acknowledged']}/{last['recipients']} чат.")
+    if slot.get('pending'):
+        text += '\n• Хүргээгүй чатад хугацааны хязгаарт дахин оролдож байна.'
+    return text
+
+
 def update_text(config, state, now_ms, inspect):
     """Хүсэлт гарсан үеийн өгөгдлөөр төлөвийг тайлбарлана; дохио илгээх/төлөв солихгүй."""
     names = {"smc": "🧠 SMC", "vp": "📦 Volume Profile", "amd": "⚡ AMD", "va80": "🧪 VA 80%",
@@ -1937,6 +1969,8 @@ def update_text(config, state, now_ms, inspect):
             continue
         pair, tf = w["pair"], w["tf"]
         out += ["", f"{PAIRS[pair]['name']} · {TF[tf][4]}"]
+        if w.get('movement_watch') and pair == 'XAUUSD' and tf == '15m':
+            out.append(movement_status(state, f'{pair}|{tf}'))
         if PAIRS[pair].get("weekend_closed") and not market_open(now_ms):
             out.append("ℹ️ Зах зээлийн амралтын цаг. Шинэ брокерын лаа хүлээж байна.")
         methods = [m for m in names if w.get(m, m in ("ema", "smc"))]
@@ -2600,6 +2634,24 @@ def main():
                 errors.append(str(e))
             print("АЛДАА", key, e)
             continue
+        if w.get('movement_watch') and pair == 'XAUUSD' and tf == '15m':
+            try:
+                closed = [b for b in bars if b['ct'] < now_ms]
+                latest_close = closed[-1]['ct'] + 1 if closed else now_ms
+                try:
+                    daily_direction = sma_trend_fn(get_daily_for(pair))(latest_close)
+                except Exception:
+                    daily_direction = None  # Long-term direction is context, not an alert veto.
+                slot = state.setdefault('movement_watch', {}).setdefault(key, {})
+                recipients = active_recipients(chats, roles)
+                status = run_watch(slot, bars, int(time.time() * 1000), recipients,
+                                   lambda cid, event: tg(token, 'sendMessage', chat_id=cid,
+                                                        text=movement_message(event), disable_web_page_preview='true'),
+                                   lambda: save_state(state), atr_fn=atr, ema_fn=ema,
+                                   daily_direction=daily_direction, clock_ms=lambda: int(time.time() * 1000))
+                print(f"Movement {key}: {status} · bar={slot.get('watermark')} · pending={len(slot.get('pending', {}))}")
+            except Exception as e:
+                print('MOVEMENT АЛДАА', key, type(e).__name__)
         if w.get("ema", True):
             if len(bars) >= RULES["trend"] + 5:
                 track_ema(key, w, bars, analyze(bars, now_ms), now_ms, step_ms)
@@ -2744,8 +2796,10 @@ def main():
 
 
 def save_state(state):
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
+    temporary = STATE_FILE + '.tmp'
+    with open(temporary, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2, sort_keys=True)
+    os.replace(temporary, STATE_FILE)
 
 
 if __name__ == "__main__":
