@@ -346,14 +346,14 @@
   "mk3_announced": true,
   "movement_watch": {
     "XAUUSD|15m": {
-      "evaluated_at": 1793802968660,
+      "evaluated_at": 1793803508503,
       "initialized_at": 1793802968660,
       "last_by_direction": {},
       "pending": {},
       "receipts": {},
-      "status": "initialized",
+      "status": "no_break",
       "version": "movement-watch-v1",
-      "watermark": 1793802600000
+      "watermark": 1793803500000
     }
   },
   "names": {
