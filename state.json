@@ -40,7 +40,51 @@
   },
   "entry_plans": {
     "XAUUSD|15m": {
-      "active": {
+      "active": null,
+      "evaluated_at": 1793895068653,
+      "history": [
+        {
+          "atr": 12.955929197402952,
+          "basis": -15.58,
+          "created_at": 1793894409913,
+          "daily_direction": -1,
+          "delivered_to": {
+            "-5078732888": {
+              "at": 1793894410695,
+              "message_id": 179
+            },
+            "-5544664828": {
+              "at": 1793894411623,
+              "message_id": 180
+            },
+            "-5562831381": {
+              "at": 1793894412554,
+              "message_id": 181
+            }
+          },
+          "direction": -1,
+          "ended_at": 1793895060000,
+          "entry": 4077.23,
+          "expires": 1793898000000,
+          "id": "entry-v1:1793894400000:-1",
+          "kind": "BOS",
+          "last_ct": 1793895059999,
+          "lots": 0.01,
+          "modeled_risk_usd": 19.36,
+          "publish_at": 1793894460000,
+          "risk": 18.759999999999764,
+          "signal_time": 1793894400000,
+          "sl": 4095.99,
+          "source": "binance:XAUTUSDT",
+          "status": "cancelled",
+          "tp": 4039.71
+        }
+      ],
+      "initialized_at": 1793880489985,
+      "last_by_direction": {
+        "-1": 1793894400000
+      },
+      "last_plan": {
         "atr": 12.955929197402952,
         "basis": -15.58,
         "created_at": 1793894409913,
@@ -60,11 +104,12 @@
           }
         },
         "direction": -1,
+        "ended_at": 1793895060000,
         "entry": 4077.23,
         "expires": 1793898000000,
         "id": "entry-v1:1793894400000:-1",
         "kind": "BOS",
-        "last_ct": 1793894999999,
+        "last_ct": 1793895059999,
         "lots": 0.01,
         "modeled_risk_usd": 19.36,
         "publish_at": 1793894460000,
@@ -72,17 +117,23 @@
         "signal_time": 1793894400000,
         "sl": 4095.99,
         "source": "binance:XAUTUSDT",
-        "status": "pending",
+        "status": "cancelled",
         "tp": 4039.71
-      },
-      "evaluated_at": 1793895008955,
-      "history": [],
-      "initialized_at": 1793880489985,
-      "last_by_direction": {
-        "-1": 1793894400000
       },
       "outbox": {},
       "receipts": {
+        "entry-v1:1793894400000:-1:closed:-5078732888": {
+          "at": 1793895069365,
+          "message_id": 182
+        },
+        "entry-v1:1793894400000:-1:closed:-5544664828": {
+          "at": 1793895070063,
+          "message_id": 183
+        },
+        "entry-v1:1793894400000:-1:closed:-5562831381": {
+          "at": 1793895070716,
+          "message_id": 184
+        },
         "entry-v1:1793894400000:-1:setup:-5078732888": {
           "at": 1793894410695,
           "message_id": 179
@@ -96,7 +147,7 @@
           "message_id": 181
         }
       },
-      "status": "pending",
+      "status": "cancelled",
       "version": "entry-v1",
       "watermark": 1793894400000
     }
