@@ -64,7 +64,7 @@
         "expires": 1793898000000,
         "id": "entry-v1:1793894400000:-1",
         "kind": "BOS",
-        "last_ct": 1793894759999,
+        "last_ct": 1793894819999,
         "lots": 0.01,
         "modeled_risk_usd": 19.36,
         "publish_at": 1793894460000,
@@ -75,7 +75,7 @@
         "status": "pending",
         "tp": 4039.71
       },
-      "evaluated_at": 1793894768275,
+      "evaluated_at": 1793894828275,
       "history": [],
       "initialized_at": 1793880489985,
       "last_by_direction": {
