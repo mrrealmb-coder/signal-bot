@@ -40,7 +40,7 @@
   },
   "entry_plans": {
     "XAUUSD|15m": {
-      "evaluated_at": 1793890748769,
+      "evaluated_at": 1793890809132,
       "history": [],
       "initialized_at": 1793880489985,
       "last_by_direction": {
@@ -48,9 +48,9 @@
       },
       "outbox": {},
       "receipts": {},
-      "status": "crossed_before_publication",
+      "status": "no_break",
       "version": "entry-v1",
-      "watermark": 1793889900000
+      "watermark": 1793890800000
     }
   },
   "error_day": "2026-10-28",
