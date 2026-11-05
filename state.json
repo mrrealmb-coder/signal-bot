@@ -38,6 +38,18 @@
       "tp": 4084.9399999999996
     }
   },
+  "entry_plans": {
+    "XAUUSD|15m": {
+      "history": [],
+      "initialized_at": 1793880489985,
+      "last_by_direction": {},
+      "outbox": {},
+      "receipts": {},
+      "status": "initialized",
+      "version": "entry-v1",
+      "watermark": 1793880000000
+    }
+  },
   "error_day": "2026-10-28",
   "history": [
     {
