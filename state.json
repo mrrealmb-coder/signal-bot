@@ -41,7 +41,7 @@
   "entry_plans": {
     "XAUUSD|15m": {
       "active": null,
-      "evaluated_at": 1793904548854,
+      "evaluated_at": 1793904608417,
       "history": [
         {
           "atr": 12.955929197402952,
@@ -512,13 +512,13 @@
   "scalp": {
     "XAUUSD|5m": {
       "dir": -1,
-      "entry": 4033.22,
-      "limit_time": 1793294100000,
-      "sent": true,
-      "sl": 4036.0145894758266,
+      "entry": 3913.86,
+      "limit_time": 1793643900000,
+      "sent": false,
+      "sl": 3915.3787503118956,
       "status": "tp",
-      "time": 1793272500000,
-      "tp": 4027.630821048346
+      "time": 1793622300000,
+      "tp": 3910.822499376209
     }
   },
   "smc": {
