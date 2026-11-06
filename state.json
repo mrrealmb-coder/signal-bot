@@ -24,7 +24,7 @@
       "pair": "XAUUSD",
       "px": null,
       "sl": 4075.6405732823073,
-      "status": "pending",
+      "status": "open",
       "tf": "15m",
       "time": 1793934900000
     },
@@ -70,7 +70,7 @@
   "entry_plans": {
     "XAUUSD|15m": {
       "active": {
-        "adverse_pips_upper": 86.30000000000109,
+        "adverse_pips_upper": 92.20000000000255,
         "atr": 11.452866411537562,
         "basis": -12.5,
         "created_at": 1793934909144,
@@ -99,7 +99,7 @@
         "hold_until": 1793956560000,
         "id": "entry-v1:1793934900000:-1",
         "kind": "BOS",
-        "last_ct": 1793952419999,
+        "last_ct": 1793952479999,
         "lots": 0.02,
         "modeled_risk_usd": 23.1,
         "publish_at": 1793934960000,
@@ -110,7 +110,7 @@
         "status": "filled",
         "tp": 4028.09
       },
-      "evaluated_at": 1793952429007,
+      "evaluated_at": 1793952490130,
       "history": [
         {
           "atr": 12.955929197402952,
@@ -279,10 +279,10 @@
         "pair": "XAUUSD",
         "signal_time": 1793934900000,
         "sl": 4075.64,
-        "status": "pending",
+        "status": "filled",
         "tf": "15m",
         "tp": 4025.66,
-        "updated": 1793934905930
+        "updated": 1793952485844
       }
     ],
     "v": 1
@@ -684,7 +684,7 @@
     "XAUUSD|15m": {
       "dir": -1,
       "sent": true,
-      "status": "pending",
+      "status": "filled",
       "time": 1793934900000
     },
     "XAUUSD|1h": {
