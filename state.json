@@ -99,7 +99,7 @@
         "hold_until": 1793956560000,
         "id": "entry-v1:1793934900000:-1",
         "kind": "BOS",
-        "last_ct": 1793940359999,
+        "last_ct": 1793940419999,
         "lots": 0.02,
         "modeled_risk_usd": 23.1,
         "publish_at": 1793934960000,
@@ -110,7 +110,7 @@
         "status": "filled",
         "tp": 4028.09
       },
-      "evaluated_at": 1793940369463,
+      "evaluated_at": 1793940428749,
       "history": [
         {
           "atr": 12.955929197402952,
