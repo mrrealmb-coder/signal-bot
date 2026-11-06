@@ -99,7 +99,7 @@
         "hold_until": 1793956560000,
         "id": "entry-v1:1793934900000:-1",
         "kind": "BOS",
-        "last_ct": 1793939339999,
+        "last_ct": 1793939399999,
         "lots": 0.02,
         "modeled_risk_usd": 23.1,
         "publish_at": 1793934960000,
@@ -110,7 +110,7 @@
         "status": "filled",
         "tp": 4028.09
       },
-      "evaluated_at": 1793939350372,
+      "evaluated_at": 1793939409722,
       "history": [
         {
           "atr": 12.955929197402952,
@@ -240,9 +240,9 @@
           "message_id": 189
         }
       },
-      "status": "filled",
+      "status": "no_break",
       "version": "entry-v1",
-      "watermark": 1793938500000
+      "watermark": 1793939400000
     }
   },
   "error_day": "2026-10-28",
