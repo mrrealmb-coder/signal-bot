@@ -69,48 +69,8 @@
   },
   "entry_plans": {
     "XAUUSD|15m": {
-      "active": {
-        "adverse_pips_upper": 92.20000000000255,
-        "atr": 11.452866411537562,
-        "basis": -12.5,
-        "created_at": 1793934909144,
-        "daily_direction": -1,
-        "delivered_to": {
-          "-5078732888": {
-            "at": 1793934909655,
-            "message_id": 187
-          },
-          "-5544664828": {
-            "at": 1793934910157,
-            "message_id": 188
-          },
-          "-5562831381": {
-            "at": 1793934910662,
-            "message_id": 189
-          }
-        },
-        "direction": -1,
-        "entry": 4049.99,
-        "expires": 1793938500000,
-        "favorable_pips_upper": 124.89999999999782,
-        "fill": 4049.99,
-        "filled_at": 1793934960000,
-        "filled_bar": 1793935019999,
-        "hold_until": 1793956560000,
-        "id": "entry-v1:1793934900000:-1",
-        "kind": "BOS",
-        "last_ct": 1793952899999,
-        "lots": 0.02,
-        "modeled_risk_usd": 23.1,
-        "publish_at": 1793934960000,
-        "risk": 10.950000000000273,
-        "signal_time": 1793934900000,
-        "sl": 4060.94,
-        "source": "binance:XAUTUSDT",
-        "status": "filled",
-        "tp": 4028.09
-      },
-      "evaluated_at": 1793952908853,
+      "active": null,
+      "evaluated_at": 1793952969146,
       "history": [
         {
           "atr": 12.955929197402952,
@@ -147,6 +107,51 @@
           "source": "binance:XAUTUSDT",
           "status": "cancelled",
           "tp": 4039.71
+        },
+        {
+          "adverse_pips_upper": 132.60000000000218,
+          "atr": 11.452866411537562,
+          "basis": -12.5,
+          "created_at": 1793934909144,
+          "daily_direction": -1,
+          "delivered_to": {
+            "-5078732888": {
+              "at": 1793934909655,
+              "message_id": 187
+            },
+            "-5544664828": {
+              "at": 1793934910157,
+              "message_id": 188
+            },
+            "-5562831381": {
+              "at": 1793934910662,
+              "message_id": 189
+            }
+          },
+          "direction": -1,
+          "ended_at": 1793952960000,
+          "entry": 4049.99,
+          "exit": 4060.94,
+          "expires": 1793938500000,
+          "favorable_pips_upper": 124.89999999999782,
+          "fill": 4049.99,
+          "filled_at": 1793934960000,
+          "filled_bar": 1793935019999,
+          "gross_pips": -109.50000000000273,
+          "gross_r": -1.0,
+          "hold_until": 1793956560000,
+          "id": "entry-v1:1793934900000:-1",
+          "kind": "BOS",
+          "last_ct": 1793952959999,
+          "lots": 0.02,
+          "modeled_risk_usd": 23.1,
+          "publish_at": 1793934960000,
+          "risk": 10.950000000000273,
+          "signal_time": 1793934900000,
+          "sl": 4060.94,
+          "source": "binance:XAUTUSDT",
+          "status": "sl",
+          "tp": 4028.09
         }
       ],
       "initialized_at": 1793880489985,
@@ -154,40 +159,49 @@
         "-1": 1793943000000
       },
       "last_plan": {
-        "atr": 12.955929197402952,
-        "basis": -15.58,
-        "created_at": 1793894409913,
+        "adverse_pips_upper": 132.60000000000218,
+        "atr": 11.452866411537562,
+        "basis": -12.5,
+        "created_at": 1793934909144,
         "daily_direction": -1,
         "delivered_to": {
           "-5078732888": {
-            "at": 1793894410695,
-            "message_id": 179
+            "at": 1793934909655,
+            "message_id": 187
           },
           "-5544664828": {
-            "at": 1793894411623,
-            "message_id": 180
+            "at": 1793934910157,
+            "message_id": 188
           },
           "-5562831381": {
-            "at": 1793894412554,
-            "message_id": 181
+            "at": 1793934910662,
+            "message_id": 189
           }
         },
         "direction": -1,
-        "ended_at": 1793895060000,
-        "entry": 4077.23,
-        "expires": 1793898000000,
-        "id": "entry-v1:1793894400000:-1",
+        "ended_at": 1793952960000,
+        "entry": 4049.99,
+        "exit": 4060.94,
+        "expires": 1793938500000,
+        "favorable_pips_upper": 124.89999999999782,
+        "fill": 4049.99,
+        "filled_at": 1793934960000,
+        "filled_bar": 1793935019999,
+        "gross_pips": -109.50000000000273,
+        "gross_r": -1.0,
+        "hold_until": 1793956560000,
+        "id": "entry-v1:1793934900000:-1",
         "kind": "BOS",
-        "last_ct": 1793895059999,
-        "lots": 0.01,
-        "modeled_risk_usd": 19.36,
-        "publish_at": 1793894460000,
-        "risk": 18.759999999999764,
-        "signal_time": 1793894400000,
-        "sl": 4095.99,
+        "last_ct": 1793952959999,
+        "lots": 0.02,
+        "modeled_risk_usd": 23.1,
+        "publish_at": 1793934960000,
+        "risk": 10.950000000000273,
+        "signal_time": 1793934900000,
+        "sl": 4060.94,
         "source": "binance:XAUTUSDT",
-        "status": "cancelled",
-        "tp": 4039.71
+        "status": "sl",
+        "tp": 4028.09
       },
       "outbox": {},
       "receipts": {
@@ -215,6 +229,18 @@
           "at": 1793894412554,
           "message_id": 181
         },
+        "entry-v1:1793934900000:-1:closed:-5078732888": {
+          "at": 1793952969677,
+          "message_id": 199
+        },
+        "entry-v1:1793934900000:-1:closed:-5544664828": {
+          "at": 1793952970273,
+          "message_id": 200
+        },
+        "entry-v1:1793934900000:-1:closed:-5562831381": {
+          "at": 1793952970810,
+          "message_id": 201
+        },
         "entry-v1:1793934900000:-1:filled:-5078732888": {
           "at": 1793935029580,
           "message_id": 193
@@ -240,7 +266,7 @@
           "message_id": 189
         }
       },
-      "status": "no_break",
+      "status": "sl",
       "version": "entry-v1",
       "watermark": 1793952900000
     }
