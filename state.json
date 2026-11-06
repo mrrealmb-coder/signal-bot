@@ -70,7 +70,7 @@
   "entry_plans": {
     "XAUUSD|15m": {
       "active": {
-        "adverse_pips_upper": 36.00000000000364,
+        "adverse_pips_upper": 44.600000000000364,
         "atr": 11.452866411537562,
         "basis": -12.5,
         "created_at": 1793934909144,
@@ -99,7 +99,7 @@
         "hold_until": 1793956560000,
         "id": "entry-v1:1793934900000:-1",
         "kind": "BOS",
-        "last_ct": 1793951639999,
+        "last_ct": 1793951699999,
         "lots": 0.02,
         "modeled_risk_usd": 23.1,
         "publish_at": 1793934960000,
@@ -110,7 +110,7 @@
         "status": "filled",
         "tp": 4028.09
       },
-      "evaluated_at": 1793951649349,
+      "evaluated_at": 1793951709796,
       "history": [
         {
           "atr": 12.955929197402952,
