@@ -92,14 +92,14 @@
         "direction": -1,
         "entry": 4049.99,
         "expires": 1793938500000,
-        "favorable_pips_upper": 97.79999999999745,
+        "favorable_pips_upper": 104.09999999999854,
         "fill": 4049.99,
         "filled_at": 1793934960000,
         "filled_bar": 1793935019999,
         "hold_until": 1793956560000,
         "id": "entry-v1:1793934900000:-1",
         "kind": "BOS",
-        "last_ct": 1793942519999,
+        "last_ct": 1793942579999,
         "lots": 0.02,
         "modeled_risk_usd": 23.1,
         "publish_at": 1793934960000,
@@ -110,7 +110,7 @@
         "status": "filled",
         "tp": 4028.09
       },
-      "evaluated_at": 1793942529177,
+      "evaluated_at": 1793942590508,
       "history": [
         {
           "atr": 12.955929197402952,
