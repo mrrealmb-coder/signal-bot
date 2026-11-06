@@ -24,7 +24,7 @@
       "pair": "XAUUSD",
       "px": null,
       "sl": 4075.6405732823073,
-      "status": "open",
+      "status": "done",
       "tf": "15m",
       "time": 1793934900000
     },
@@ -70,7 +70,7 @@
   "entry_plans": {
     "XAUUSD|15m": {
       "active": null,
-      "evaluated_at": 1793955309134,
+      "evaluated_at": 1793955368914,
       "history": [
         {
           "atr": 12.955929197402952,
@@ -294,8 +294,10 @@
       },
       {
         "chat": "day",
+        "close_time": 1793955600000,
         "dir": "SELL",
         "entry": 4058.98,
+        "exit": 4074.1,
         "expires": 1793956500000,
         "id": "smc|XAUUSD|15m|1793934900000",
         "lots": 0.02,
@@ -303,12 +305,13 @@
         "name": "🧠 SMC",
         "order": "limit",
         "pair": "XAUUSD",
+        "r": -1.0,
         "signal_time": 1793934900000,
         "sl": 4075.64,
-        "status": "filled",
+        "status": "sl",
         "tf": "15m",
         "tp": 4025.66,
-        "updated": 1793952485844
+        "updated": 1793955365994
       }
     ],
     "v": 1
@@ -443,6 +446,32 @@
       "r": -0.89,
       "sl": 77668.88,
       "t": 1793408419237
+    },
+    {
+      "dir": "SELL",
+      "entry": 4057.44,
+      "exit": 4074.1,
+      "how": "SL",
+      "k": "XAUUSD|15m",
+      "m": "smc",
+      "open": 1793934900000,
+      "pips": -166.6,
+      "r": -1.0,
+      "sl": 4074.1,
+      "t": 1793955373403
+    },
+    {
+      "dir": "SELL",
+      "entry": 4058.98,
+      "exit": 4074.1,
+      "how": "SL",
+      "k": "XAUUSD|15m",
+      "m": "smc_d",
+      "open": 1793934900000,
+      "pips": -151.2,
+      "r": -1.0,
+      "sl": 4075.64,
+      "t": 1793955373403
     }
   ],
   "ledger": [
@@ -613,6 +642,18 @@
       "m": "st_t",
       "r": -0.89,
       "t": 1793408419237
+    },
+    {
+      "k": "XAUUSD|15m",
+      "m": "smc",
+      "r": -1.0,
+      "t": 1793955373403
+    },
+    {
+      "k": "XAUUSD|15m",
+      "m": "smc_d",
+      "r": -1.0,
+      "t": 1793955373403
     }
   ],
   "ledger_start": 1793195530901,
@@ -710,7 +751,7 @@
     "XAUUSD|15m": {
       "dir": -1,
       "sent": true,
-      "status": "filled",
+      "status": "sl",
       "time": 1793934900000
     },
     "XAUUSD|1h": {
