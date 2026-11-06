@@ -70,7 +70,7 @@
   "entry_plans": {
     "XAUUSD|15m": {
       "active": null,
-      "evaluated_at": 1793957349091,
+      "evaluated_at": 1793957408994,
       "history": [
         {
           "atr": 12.955929197402952,
@@ -268,7 +268,7 @@
       },
       "status": "no_break",
       "version": "entry-v1",
-      "watermark": 1793956500000
+      "watermark": 1793957400000
     }
   },
   "error_day": "2026-10-28",
