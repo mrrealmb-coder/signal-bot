@@ -1,5 +1,10 @@
 # Prospective paired Profile target observation
 
+**Superseded on 2026-11-08:** the hourly workflow now runs `breakout_paper.py`
+independently of Telegram delivery. Current results: `BREAKOUT_PAPER_STATUS.md`.
+The older journal is retained as historical evidence, not combined with the new
+experiment. The rest of this document describes the former sent-signal observer.
+
 Experimental, separate hourly workflow. Original bot source/config and Telegram
 entry/SL/TP remain unchanged. No Telegram or broker credentials are supplied.
 

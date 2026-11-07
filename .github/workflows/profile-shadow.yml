@@ -1,11 +1,11 @@
-name: Profile TP shadow observation
+name: Independent Breakout paper test
 on:
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch: {}
   push:
     branches: [main]
-    paths: ['profile_shadow.py', 'test_profile_shadow.py', '.github/workflows/profile-shadow.yml']
+    paths: ['breakout_paper.py', 'test_breakout_paper.py', 'profile_shadow.py', 'test_profile_shadow.py', '.github/workflows/profile-shadow.yml']
 permissions:
   contents: write
 concurrency:
@@ -23,16 +23,16 @@ jobs:
         with:
           python-version: '3.12'
       - name: Validate shadow isolation and calculations
-        run: python -m unittest test_profile_shadow
+        run: python -m unittest test_profile_shadow test_breakout_paper
       - name: Observe new signals without sending messages
         id: observe
         continue-on-error: true
-        run: python profile_shadow.py
+        run: python breakout_paper.py
       - name: Persist only shadow evidence
         run: |
           git config user.name 'profile-shadow'
           git config user.email 'profile-shadow@users.noreply.github.com'
-          git add profile_shadow_state.json PROFILE_SHADOW_STATUS.md
+          git add breakout_paper_state.json BREAKOUT_PAPER_STATUS.md
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'Update prospective Profile TP shadow evidence'
           for attempt in 1 2 3; do
