@@ -17,6 +17,7 @@ buy-sell.html хуудастай яг ижил дүрмээр ажиллана:
 """
 
 import bisect
+from smc_frozen import freeze as freeze_smc, select as select_smc
 import json
 import math
 import os
@@ -2325,7 +2326,9 @@ def main():
         label = "SMC эсрэг" if ct else "SMC"
         scalp = bool(w.get("scalp")) and not ct   # ⚡ зөвхөн Scalp чатад, IC-ийн өдрийн хаалтаар хаана
         copy = bool(w.get("scalp_copy")) and not ct
+        rec = state.setdefault(bucket, {}).get(key)
         S = smc_setup(bars, now_ms, step_ms, kinds, htf, float(w.get("smc_min_risk", 0)))
+        S = select_smc(rec, S, bars, now_ms, step_ms)
         if S:
             S["htf_tf"] = htf_tf
             S["sma"] = bool(w.get("smc_sma"))
@@ -2334,12 +2337,13 @@ def main():
         if not S:
             print(f"{key}: {label} бүтэц алга")
             return
-        rec = state.setdefault(bucket, {}).get(key)
         print(f"{key}: {label} {S['kind']} {'BUY' if S['dir'] == 1 else 'SELL'} {fmt_time(S['time'])} · {S['status']}")
         if not rec or rec.get("time") != S["time"]:
             if (ct or scalp) and not rec and S["status"] != "pending":
                 print("  (анх нэмэгдсэн тул хуучин санааг илгээхгүй, зөвхөн тэмдэглэв)")
             elif S["status"] in ("pending", "filled"):
+                if w['pair'] == 'XAUUSD':
+                    S = freeze_smc(S, bars, PAIRS[w['pair']]['dec'])
                 cancel_prev = None
                 if rec and rec.get("status") == "pending":
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
@@ -2363,6 +2367,8 @@ def main():
                              "scalp" if scalp else ("day" if dmsg != msg else "swing"), now_ms)
                 print(f"  → {label} санаа илгээлээ")
                 state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"], "sent": True}
+                if S.get('_frozen_version'):
+                    state[bucket][key]['frozen'] = S
                 return
             state[bucket][key] = {"time": S["time"], "dir": S["dir"], "status": S["status"]}
             return
@@ -2389,6 +2395,8 @@ def main():
             elif not ct:
                 day_fill(bucket, key, S["time"], S["status"])
             rec["status"] = S["status"]
+        if rec.get('frozen'):
+            rec['frozen'] = S
 
     def track_vp(key, w, now_ms, ct=False):
         bucket = "vp_ct" if ct else "vp"
@@ -2838,6 +2846,7 @@ def main():
                     htf = lambda t: sma(t) if base is None or base(t) == sma(t) else 0
                 P = smc_setup(bars, now_ms, step, tuple(w.get("smc_kinds", ["BOS", "CHoCH"])), htf,
                               float(w.get("smc_min_risk", 0)))
+                P = select_smc(state.get('smc', {}).get(f'{pair}|{tf}'), P, bars, now_ms, step)
             elif method == "amd":
                 P = state.get("scalp", {}).get(f"{pair}|{tf}")
                 P = dict(P) if P and P.get("status") == "open" else amd_signal(bars, get_daily_for(pair), now_ms, step)
