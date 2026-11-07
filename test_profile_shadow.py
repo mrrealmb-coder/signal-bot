@@ -18,7 +18,7 @@ def bar(i,o,h,l,c):return dict(ct=T+(i+1)*MINUTE-1,o=o,h=h,l=l,c=c,v=1)
 
 class ShadowTests(unittest.TestCase):
     def test_init_no_backfill_or_fetch(self):
-        state={};live=dict(entry_plans=dict(active=plan()));original=copy.deepcopy(live)
+        state={};live=dict(entry_plans={'XAUUSD|15m':dict(active=plan())});original=copy.deepcopy(live)
         tick(state,live,T+5000,lambda *_:self.fail('No fetch during initialization'))
         tick(state,live,T+6000,lambda *_:self.fail('Old signal must be excluded'))
         self.assertEqual(state['records'],{});self.assertEqual(live,original)
@@ -67,21 +67,21 @@ class ShadowTests(unittest.TestCase):
 
     def test_journal_roundtrip_dedup_and_no_live_mutation(self):
         j={};tick(j,{},T-1000)
-        live=dict(entry_plans=dict(active=plan(),history=[plan()]));before=copy.deepcopy(live)
+        live=dict(entry_plans={'XAUUSD|15m':dict(active=plan(),history=[plan()])});before=copy.deepcopy(live)
         tick(j,live,T+1000,lambda start,end:prior())
         self.assertEqual(len(j['records']),1);self.assertEqual(live,before)
         restored=json.loads(json.dumps(j));tick(restored,live,T+2000,lambda *_:self.fail('Duplicate fetch'))
         self.assertEqual(restored['records'],j['records']);self.assertIn('completed resolved pairs: 0',report(j))
 
     def test_error_visible_and_retryable(self):
-        j={};tick(j,{},T-1000);live=dict(entry_plans=dict(active=plan()))
+        j={};tick(j,{},T-1000);live=dict(entry_plans={'XAUUSD|15m':dict(active=plan())})
         def broken(*_):raise ValueError('missing')
         tick(j,live,T+1000,broken);self.assertTrue(j['errors']);self.assertFalse(j['records'])
         tick(j,live,T+2000,lambda *_:prior());self.assertFalse(j['errors']);self.assertEqual(len(j['records']),1)
 
     def test_unacknowledged_signal_excluded(self):
         j={};tick(j,{},T-1000);p=plan();p['delivered_to']={}
-        tick(j,dict(entry_plans=dict(active=p)),T+1000,lambda *_:self.fail('No fetch'))
+        tick(j,dict(entry_plans={'XAUUSD|15m':dict(active=p)}),T+1000,lambda *_:self.fail('No fetch'))
         self.assertFalse(j['records'])
 
     def test_market_rule_and_empty_volume(self):

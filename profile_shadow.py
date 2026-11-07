@@ -118,7 +118,7 @@ def tick(journal,live,now,fetch=fetch_minutes):
         journal.update(version=VERSION,started_at=now,records={},errors={},last_run=now)
         return  # No earlier plans are admitted, including currently open ones.
     if journal.get('version')!=VERSION:raise ValueError('Unknown shadow version')
-    slot=live.get('entry_plans',{});plans=list(slot.get('history',[]))
+    slot=live.get('entry_plans',{}).get('XAUUSD|15m',{});plans=list(slot.get('history',[]))
     if slot.get('active'):plans.append(slot['active'])
     for p in plans:
         if p['signal_time']<journal['started_at'] or not p.get('delivered_to') or p['id'] in journal['records']:continue
