@@ -73,6 +73,7 @@ def tick(j,now,fetch=fetch_minutes,detect=latest_break):
 def status(j):
     text=report(j).replace('Prospective Profile TP shadow test','Independent Breakout paper test')
     text=text.replace('New acknowledged signals:','Independently detected paper setups:')
+    text=text.replace('profile_shadow_state.json','breakout_paper_state.json')
     text=text.replace('Historical plans before initialization excluded.',
         'Uses raw XAUT prices, NOT spot-adjusted broker prices. No state.json or Telegram acknowledgement dependency. Signals before this independent test initialization excluded.')
     text+='\nModeled activation is signal close +60s; processing is delayed, so this is not a live execution-latency test.\n'

@@ -1,5 +1,7 @@
 # Prospective Profile TP shadow test
 
+**Archived observer. Current independent test: [BREAKOUT_PAPER_STATUS.md](BREAKOUT_PAPER_STATUS.md).**
+
 Started (UTC): 2026-11-07T17:42:01.729000+00:00
 Last checked (UTC): 2026-11-07T17:55:36.240000+00:00
 
