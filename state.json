@@ -276,8 +276,10 @@
     "signals": [
       {
         "chat": "day",
+        "close_time": 1793959199999,
         "dir": "SELL",
         "entry": 4060.55,
+        "exit": 4092.32,
         "expires": null,
         "id": "vp|XAUUSD|1h|1793934000000",
         "lots": 0.01,
@@ -285,33 +287,13 @@
         "name": "📦 VP",
         "order": "market",
         "pair": "XAUUSD",
+        "r": -1.0,
         "signal_time": 1793934000000,
         "sl": 4092.32,
-        "status": "open",
+        "status": "sl",
         "tf": "1h",
         "tp": 3997.0,
-        "updated": 1793934006136
-      },
-      {
-        "chat": "day",
-        "close_time": 1793955600000,
-        "dir": "SELL",
-        "entry": 4058.98,
-        "exit": 4074.1,
-        "expires": 1793956500000,
-        "id": "smc|XAUUSD|15m|1793934900000",
-        "lots": 0.02,
-        "method": "smc",
-        "name": "🧠 SMC",
-        "order": "limit",
-        "pair": "XAUUSD",
-        "r": -1.0,
-        "signal_time": 1793934900000,
-        "sl": 4075.64,
-        "status": "sl",
-        "tf": "15m",
-        "tp": 4025.66,
-        "updated": 1793955365994
+        "updated": 1794158286011
       }
     ],
     "v": 1
@@ -485,6 +467,19 @@
       "r": -0.17,
       "sl": 4092.32,
       "t": 1794001512992
+    },
+    {
+      "dir": "SELL",
+      "entry": 4060.55,
+      "exit": 4092.32,
+      "how": "SL",
+      "k": "XAUUSD|1h",
+      "m": "vp",
+      "open": 1793934000000,
+      "pips": -317.7,
+      "r": -1.0,
+      "sl": 4092.32,
+      "t": 1794158291095
     }
   ],
   "ledger": [
@@ -673,6 +668,12 @@
       "m": "vp_d",
       "r": -0.17,
       "t": 1794001512992
+    },
+    {
+      "k": "XAUUSD|1h",
+      "m": "vp",
+      "r": -1.0,
+      "t": 1794158291095
     }
   ],
   "ledger_start": 1793195530901,
@@ -906,7 +907,7 @@
       "entry": 4060.55,
       "sent": true,
       "sl": 4092.3228522631453,
-      "status": "open",
+      "status": "sl",
       "time": 1793934000000,
       "tp": 3997.0042954737105
     }
