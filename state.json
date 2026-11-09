@@ -294,6 +294,24 @@
         "tf": "1h",
         "tp": 3997.0,
         "updated": 1794158286011
+      },
+      {
+        "chat": "scalp",
+        "dir": "SELL",
+        "entry": 4111.95,
+        "expires": 1794248700000,
+        "id": "amd|XAUUSD|5m|1794227100000",
+        "lots": 0.14,
+        "method": "amd",
+        "name": "⚡ AMD",
+        "order": "market",
+        "pair": "XAUUSD",
+        "signal_time": 1794227100000,
+        "sl": 4114.22,
+        "status": "open",
+        "tf": "5m",
+        "tp": 4107.4,
+        "updated": 1794227106779
       }
     ],
     "v": 1
@@ -733,13 +751,13 @@
   "scalp": {
     "XAUUSD|5m": {
       "dir": -1,
-      "entry": 3919.46,
-      "limit_time": 1793730000000,
-      "sent": false,
-      "sl": 3921.541193284919,
-      "status": "sl",
-      "time": 1793708400000,
-      "tp": 3915.2976134301625
+      "entry": 4111.950000000001,
+      "limit_time": 1794248700000,
+      "sent": true,
+      "sl": 4114.2234343207765,
+      "status": "open",
+      "time": 1794227100000,
+      "tp": 4107.403131358449
     }
   },
   "smc": {
