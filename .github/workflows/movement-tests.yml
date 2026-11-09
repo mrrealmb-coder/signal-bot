@@ -2,9 +2,9 @@ name: Signal delivery and entry tests
 on:
   push:
     branches: [main, codex/movement-watch-live, codex/entry-sl-tp]
-    paths: [signal_bot.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
+    paths: [signal_bot.py, amd_confirmation.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
   pull_request:
-    paths: [signal_bot.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
+    paths: [signal_bot.py, amd_confirmation.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
 permissions:
   contents: read
 jobs:
@@ -16,4 +16,4 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m unittest -q test_update.py test_movement_watch.py test_entry_plans.py test_smc_frozen.py test_profile_shadow.py
+      - run: python -m unittest -q test_update.py test_movement_watch.py test_entry_plans.py test_smc_frozen.py test_profile_shadow.py test_amd_confirmation.py

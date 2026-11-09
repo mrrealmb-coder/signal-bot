@@ -87,8 +87,8 @@ DAY = {"open_srv": 1.05, "last_entry_srv": 23.0, "close_srv": 23.75}
 #   2) Manipulation: 07:00–11:00-д үнэ хүрээний нэг талыг цоолоод (sweep) 5 минутын лаа буцаж хүрээн дотор хаагдвал
 #   3) Эсрэг тийш Market, зөвхөн 200 өдрийн чигийн дагуу. SL = цоолсон оргил + 0.1 ATR, TP = хүрээний дунд (≤ 2R).
 #   Өдөрт ганц (эхний) боломж. 6 цагт эсвэл IC-ийн өдрийн хаалтад (аль түрүүлэх) хүрэхгүй бол хаана.
-# 2.4 жилийн PAXG 5 минутын туршилт (IC Raw ~0.28$/унц зардлаар): +41R / 183 арилжаа, ялалт 50%, 6 хагас жил бүгдэд
-# ашигтай, зардал 2 дахин бол +28R. 200 өдрийн чигийн эсрэг талын дохио −33R. Позиц медиан 20 минут барина.
+# Шинэ хувилбар: sweep/reclaim дараа 3 хаагдсан M5 лаанд чиглэлийн баталгаа хүлээнэ.
+# Баталгааны close шинэ Entry; анхны SL, хугацаа хэвээр; TP зай дээд тал нь $6.
 AMD = {"rng": (2, 7), "man": (7, 11), "sl_buf_atr": 0.1, "max_r_atr": 6.0, "min_tp_r": 0.5, "tp_cap_r": 2.0,
        "hold": 72, "fresh_bars": 2}
 
@@ -910,13 +910,39 @@ def amd_signal(bars, daily, now_ms, step_ms=300000):
                         "hi": hi, "lo": lo, "ext": ext, "ext_time": ext_t,
                         "r_start": closed[R[0]]["ct"] + 1 - step_ms, "r_end": closed[R[-1]]["ct"] + 1,
                         "limit_time": min(t + AMD["hold"] * step_ms, cut or 10 ** 15),
-                        "age": len(closed) - 1 - k, "status": "open"}
+                        "age": len(closed) - 1 - k, "status": "open", "atr": at}
             break
-    return best
+    if best is None:
+        return None
+    from amd_confirmation import confirmed_plan
+    original_time = best['time']
+    plan = dict(best, id=f'amd:{original_time}', direction=best['dir'])
+    confirmed, reason = confirmed_plan(plan, closed, [b['ct'] + 1 - step_ms for b in closed])
+    if confirmed is None:
+        return None
+    confirmed['tp'] = confirmed['dir'] * min(confirmed['dir'] * confirmed['tp'], confirmed['dir'] * confirmed['entry'] + 6)
+    confirmed['age'] = sum(b['ct'] + 1 > confirmed['time'] for b in closed)
+    confirmed['confirmation_version'] = 1
+    confirmed['setup_time'] = original_time
+    # Save the price frame used for published levels; later basis updates must not move the stop.
+    if bars[-1].get('_source') == 'binance:XAUTUSDT':
+        confirmed['_source'] = bars[-1]['_source']
+        confirmed['_basis'] = bars[-1]['_basis']
+    return confirmed
 
 
 def amd_outcome(bars, P, now_ms):
     """Оролтын дараа: SL, TP (одоогийн хаагдаагүй лааг оруулан), эсвэл хугацаа/өдрийн хаалт."""
+    if P.get('confirmation_version') and '_basis' in P:
+        adjusted = []
+        for b in bars:
+            if b.get('_source') != P['_source'] or not math.isfinite(b.get('_basis', float('nan'))):
+                raise DataError('AMD tracking source/basis unavailable')
+            x = dict(b)
+            for k in ('o', 'h', 'l', 'c'):
+                x[k] = b[k] + b['_basis'] - P['_basis']
+            adjusted.append(x)
+        bars = adjusted
     d = P["dir"]
     for b in bars:
         if b["ct"] + 1 <= P["time"]:
@@ -1676,17 +1702,18 @@ def amd_message(pair_key, tf, P, price):
         f"Consolidation ({fmt_time(P['r_start'])[-5:]}–{fmt_time(P['r_end'])[-5:]}): "
         f"{fmt_p(P['lo'], dec)} – {fmt_p(P['hi'], dec)}",
         f"Manipulation: хүрээний {swept} талыг {fmt_p(P['ext'], dec)} хүртэл цоолоод буцаж хүрээнд хаагдлаа · "
-        f"{fmt_time(P['time'])}",
+        f"{fmt_time(P.get('setup_time', P['time']))}",
+        f"Баталгаа: 5м лаа дохионы лааны {'доод' if d == -1 else 'дээд'} цэгийг давж хаагдсан · {fmt_time(P['time'])}",
         trend_line(d),
         "",
         f"Оролт (Market): {fmt_p(P['entry'], dec)}",
         f"SL: {fmt_p(P['sl'], dec)}  ({'−' if d == 1 else '+'}{fmt_p(risk, dec)})",
         f"TP: {fmt_p(P['tp'], dec)}  ({'+' if d == 1 else '−'}{fmt_p(abs(P['tp'] - P['entry']), dec)} · {rr:.1f}R)"
-        + (" — хүрээний дунд" if rr < AMD["tp_cap_r"] - 1e-6 else ""),
+        + " · TP зай дээд тал нь $6",
         f"Хугацаа: TP/SL-д хүрэхгүй бол {fmt_time(P['limit_time'])[-5:]}-д хаана.",
         f"Одоогийн үнэ: {fmt_p(price, dec)}",
         "ℹ️ Үнэ Binance XAUT-аас тул брокерын үнээс бага зэрэг зөрнө. SL/TP-г хаалтанд буй зайгаар тавина уу.",
-        "🧪 Туршилтын скальп: 2.4 жилийн туршилтаар +41R / 183 арилжаа (ялалт 50%). 1–2 сар мөнгө тавихгүйгээр ажиглана.",
+        "🧪 AMD баталгаатай оролтын шинэ хувилбар. Түүхэн туршилт нь бодит гүйцэтгэлийн баталгаа биш.",
     ]
     if P["age"] >= AMD["fresh_bars"]:
         lines.append(f"⚠️ Дохио {P['age']} лааны өмнө гарсан. Үнэ хол явсан бол хожуу орох эрсдэлтэй.")
@@ -2544,7 +2571,7 @@ def main():
                 P["sent"] = True
                 feed_put(state, "amd", key, P, "open", "market", "scalp", now_ms)
                 print("  → AMD scalp дохио илгээлээ")
-            scal[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "limit_time", "status", "sent")}
+            scal[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "limit_time", "status", "sent", "confirmation_version", "setup_time", "_source", "_basis")}
 
     def track_va80(key, w, now_ms):
         """🧪 VA 80%: PAXG 1 цаг (VA) + PAXG 15 минут (дохио), зах зээлийн цагаар шүүнэ. ⚡ Scalp чатад илгээнэ."""

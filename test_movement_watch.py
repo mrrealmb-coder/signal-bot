@@ -143,6 +143,7 @@ class WatchTests(unittest.TestCase):
         state={'owner':'owner','chat_ids':['owner','day','swing','scalp'],'chat_roles':{'owner':'off','day':'day','swing':'swing','scalp':'scalp'},
                'smc':{'old':{'status':'pending'}},'vp':{'old':{'status':'open'}},'history':[{'sentinel':True}],
                **{k:True for k in ('started','smc_announced','vp_announced','day_announced','mk2_announced','mk3_announced')}}
+        state['report_week'] = bot.datetime.now(bot.UB).strftime('%G-W%V')
         before=copy.deepcopy(state)
         bars=[dict(ct=now-1001-(60-i)*900000,o=100,h=101,l=99,c=100,v=1) for i in range(61)]
         with tempfile.TemporaryDirectory() as directory,ExitStack() as stack:
