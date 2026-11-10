@@ -13,7 +13,22 @@
     "5371043257": "off"
   },
   "ct_announced": true,
-  "day": {},
+  "day": {
+    "vp|XAUUSD|1h": {
+      "copy": false,
+      "cut": 1794347100000,
+      "dir": -1,
+      "entry": 4075.27,
+      "kind": "day",
+      "led": "vp_d",
+      "pair": "XAUUSD",
+      "px": "PAXGUSDT",
+      "sl": 4097.3359754072535,
+      "status": "open",
+      "tf": "1h",
+      "time": 1794308400000
+    }
+  },
   "day_announced": true,
   "dtc": {
     "XAUUSD|15m": {
@@ -286,6 +301,24 @@
         "tf": "5m",
         "tp": 4107.4,
         "updated": 1794227286835
+      },
+      {
+        "chat": "day",
+        "dir": "SELL",
+        "entry": 4075.27,
+        "expires": null,
+        "id": "vp|XAUUSD|1h|1794308400000",
+        "lots": 0.01,
+        "method": "vp",
+        "name": "📦 VP",
+        "order": "market",
+        "pair": "XAUUSD",
+        "signal_time": 1794308400000,
+        "sl": 4097.34,
+        "status": "open",
+        "tf": "1h",
+        "tp": 4031.14,
+        "updated": 1794309486662
       }
     ],
     "v": 1
@@ -915,12 +948,12 @@
     },
     "XAUUSD|1h": {
       "dir": -1,
-      "entry": 4060.55,
+      "entry": 4075.27,
       "sent": true,
-      "sl": 4092.3228522631453,
-      "status": "sl",
-      "time": 1793934000000,
-      "tp": 3997.0042954737105
+      "sl": 4097.3359754072535,
+      "status": "open",
+      "time": 1794308400000,
+      "tp": 4031.138049185492
     }
   },
   "vp_announced": true,
