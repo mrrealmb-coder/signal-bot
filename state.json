@@ -14,6 +14,20 @@
   },
   "ct_announced": true,
   "day": {
+    "smc|XAUUSD|15m": {
+      "copy": true,
+      "cut": 1794347100000,
+      "dir": -1,
+      "entry": 4062.25,
+      "kind": "day",
+      "led": "smc_d",
+      "pair": "XAUUSD",
+      "px": null,
+      "sl": 4084.82,
+      "status": "pending",
+      "tf": "15m",
+      "time": 1794318300000
+    },
     "vp|XAUUSD|1h": {
       "copy": false,
       "cut": 1794347100000,
@@ -319,6 +333,24 @@
         "tf": "1h",
         "tp": 4031.14,
         "updated": 1794309486662
+      },
+      {
+        "chat": "day",
+        "dir": "SELL",
+        "entry": 4062.25,
+        "expires": 1794339900000,
+        "id": "smc|XAUUSD|15m|1794318300000",
+        "lots": 0.01,
+        "method": "smc",
+        "name": "🧠 SMC",
+        "order": "limit",
+        "pair": "XAUUSD",
+        "signal_time": 1794318300000,
+        "sl": 4084.82,
+        "status": "pending",
+        "tf": "15m",
+        "tp": 4017.11,
+        "updated": 1794318306623
       }
     ],
     "v": 1
@@ -814,9 +846,37 @@
     },
     "XAUUSD|15m": {
       "dir": -1,
+      "frozen": {
+        "_basis": -10.91,
+        "_frozen_version": 1,
+        "_source": "binance:XAUTUSDT",
+        "close_time": null,
+        "ct": false,
+        "dir": -1,
+        "entry": 4062.25,
+        "expires": 1794339900000,
+        "fill_time": null,
+        "fvg": null,
+        "htf_tf": "1h",
+        "kind": "BOS",
+        "level": 4068.0099999999998,
+        "level_time": 1794309300000,
+        "ob": [
+          4041.31,
+          4083.19
+        ],
+        "ob_mid": true,
+        "ob_time": 1794318300000,
+        "sl": 4084.82,
+        "sma": true,
+        "status": "pending",
+        "test": false,
+        "time": 1794318300000,
+        "tp": 4017.11
+      },
       "sent": true,
-      "status": "sl",
-      "time": 1793934900000
+      "status": "pending",
+      "time": 1794318300000
     },
     "XAUUSD|1h": {
       "dir": -1,
