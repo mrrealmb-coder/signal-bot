@@ -276,48 +276,6 @@
     "signals": [
       {
         "chat": "day",
-        "close_time": 1793959199999,
-        "dir": "SELL",
-        "entry": 4060.55,
-        "exit": 4092.32,
-        "expires": null,
-        "id": "vp|XAUUSD|1h|1793934000000",
-        "lots": 0.01,
-        "method": "vp",
-        "name": "📦 VP",
-        "order": "market",
-        "pair": "XAUUSD",
-        "r": -1.0,
-        "signal_time": 1793934000000,
-        "sl": 4092.32,
-        "status": "sl",
-        "tf": "1h",
-        "tp": 3997.0,
-        "updated": 1794158286011
-      },
-      {
-        "chat": "scalp",
-        "close_time": 1794227286835,
-        "dir": "SELL",
-        "entry": 4111.95,
-        "exit": 4114.22,
-        "expires": 1794248700000,
-        "id": "amd|XAUUSD|5m|1794227100000",
-        "lots": 0.14,
-        "method": "amd",
-        "name": "⚡ AMD",
-        "order": "market",
-        "pair": "XAUUSD",
-        "r": -1.0,
-        "signal_time": 1794227100000,
-        "sl": 4114.22,
-        "status": "sl",
-        "tf": "5m",
-        "tp": 4107.4,
-        "updated": 1794227286835
-      },
-      {
-        "chat": "day",
         "close_time": 1794327665582,
         "dir": "SELL",
         "entry": 4075.27,
@@ -357,6 +315,24 @@
         "tf": "15m",
         "tp": 4017.11,
         "updated": 1794329346356
+      },
+      {
+        "chat": "scalp",
+        "dir": "BUY",
+        "entry": 4017.9,
+        "expires": null,
+        "id": "va|XAUUSD|15m|1794410100000",
+        "lots": 0.04,
+        "method": "va",
+        "name": "🧪 VA 80%",
+        "order": "market",
+        "pair": "XAUUSD",
+        "signal_time": 1794410100000,
+        "sl": 4010.2,
+        "status": "open",
+        "tf": "15m",
+        "tp": 4101.0,
+        "updated": 1794410105686
       }
     ],
     "v": 1
@@ -1068,14 +1044,14 @@
   "update_offset": 291487609,
   "va": {
     "XAUUSD|15m": {
-      "dir": -1,
-      "end": 1794348000000,
-      "entry": 4130.9800000000005,
-      "sent": false,
-      "sl": 4135.166200314442,
-      "status": "sl",
-      "time": 1794264300000,
-      "tp": 4091.0
+      "dir": 1,
+      "end": 1794433500000,
+      "entry": 4017.9,
+      "sent": true,
+      "sl": 4010.1975289927486,
+      "status": "open",
+      "time": 1794410100000,
+      "tp": 4101.0
     }
   },
   "vp": {
