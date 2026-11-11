@@ -8,8 +8,8 @@
   "chat_roles": {
     "-1004482695939": "off",
     "-5078732888": "scalp",
-    "-5544664828": "day",
-    "-5562831381": "swing",
+    "-5544664828": "off",
+    "-5562831381": "off",
     "5371043257": "off"
   },
   "ct_announced": true,
@@ -1065,7 +1065,7 @@
     }
   },
   "started": true,
-  "update_offset": 291487605,
+  "update_offset": 291487607,
   "va": {
     "XAUUSD|15m": {
       "dir": -1,
