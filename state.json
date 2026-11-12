@@ -24,7 +24,7 @@
       "pair": "XAUUSD",
       "px": null,
       "sl": 3958.78,
-      "status": "pending",
+      "status": "cancel",
       "tf": "15m",
       "time": 1794489300000
     },
@@ -275,48 +275,6 @@
   "feed": {
     "signals": [
       {
-        "chat": "day",
-        "close_time": 1794327665582,
-        "dir": "SELL",
-        "entry": 4075.27,
-        "exit": 4031.14,
-        "expires": null,
-        "id": "vp|XAUUSD|1h|1794308400000",
-        "lots": 0.01,
-        "method": "vp",
-        "name": "📦 VP",
-        "order": "market",
-        "pair": "XAUUSD",
-        "r": 2.0,
-        "signal_time": 1794308400000,
-        "sl": 4097.34,
-        "status": "tp",
-        "tf": "1h",
-        "tp": 4031.14,
-        "updated": 1794327665582
-      },
-      {
-        "chat": "day",
-        "close_time": 1794330000000,
-        "dir": "SELL",
-        "entry": 4062.25,
-        "exit": 4017.11,
-        "expires": 1794339900000,
-        "id": "smc|XAUUSD|15m|1794318300000",
-        "lots": 0.01,
-        "method": "smc",
-        "name": "🧠 SMC",
-        "order": "limit",
-        "pair": "XAUUSD",
-        "r": 2.0,
-        "signal_time": 1794318300000,
-        "sl": 4084.82,
-        "status": "tp",
-        "tf": "15m",
-        "tp": 4017.11,
-        "updated": 1794329346356
-      },
-      {
         "chat": "scalp",
         "close_time": 1794410645792,
         "dir": "BUY",
@@ -392,10 +350,10 @@
         "pair": "XAUUSD",
         "signal_time": 1794489300000,
         "sl": 3958.78,
-        "status": "pending",
+        "status": "expired",
         "tf": "15m",
         "tp": 3935.45,
-        "updated": 1794489306436
+        "updated": 1794510906248
       }
     ],
     "v": 1
@@ -1088,13 +1046,13 @@
         "ob_time": 1794482100000,
         "sl": 3958.78,
         "sma": true,
-        "status": "pending",
+        "status": "expired",
         "test": false,
         "time": 1794489300000,
         "tp": 3935.45
       },
       "sent": true,
-      "status": "pending",
+      "status": "expired",
       "time": 1794489300000
     },
     "XAUUSD|1h": {
