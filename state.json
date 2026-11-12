@@ -24,7 +24,7 @@
       "pair": "XAUUSD",
       "px": null,
       "sl": 3994.11,
-      "status": "pending",
+      "status": "open",
       "tf": "15m",
       "time": 1794438900000
     },
@@ -368,10 +368,10 @@
         "pair": "XAUUSD",
         "signal_time": 1794438900000,
         "sl": 3994.11,
-        "status": "pending",
+        "status": "filled",
         "tf": "15m",
         "tp": 3974.66,
-        "updated": 1794438905964
+        "updated": 1794444185785
       }
     ],
     "v": 1
@@ -990,7 +990,7 @@
         "dir": -1,
         "entry": 3987.62,
         "expires": 1794460500000,
-        "fill_time": null,
+        "fill_time": 1794443400000,
         "fvg": null,
         "htf_tf": "1h",
         "kind": "BOS",
@@ -1004,13 +1004,13 @@
         "ob_time": 1794438900000,
         "sl": 3994.11,
         "sma": true,
-        "status": "pending",
+        "status": "filled",
         "test": false,
         "time": 1794438900000,
         "tp": 3974.66
       },
       "sent": true,
-      "status": "pending",
+      "status": "filled",
       "time": 1794438900000
     },
     "XAUUSD|1h": {
