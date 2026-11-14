@@ -5,6 +5,41 @@ from pathlib import Path
 from contextlib import ExitStack
 from unittest.mock import patch
 from smc_frozen import freeze,evaluate,select
+from signal_bot import smc_setup,smc_hours_ok
+
+H=3600000
+def swing_bars(day_start,break_hour):
+    """Flat 15m candles with one swing low, then a candle closing below it at `break_hour` UTC."""
+    first=day_start+int(break_hour*H)-40*STEP
+    rows=[]
+    for i in range(60):
+        o,h,l,c=100.0,101.0,99.0,100.0
+        if i==20:l=97.0
+        if i==39:o,h,l,c=100.0,100.5,94.0,95.0
+        rows.append(dict(ct=first+(i+1)*STEP-1,o=o,h=h,l=l,c=c,v=1.0))
+    return rows
+
+class HoursTests(unittest.TestCase):
+    def test_window_is_half_open_and_may_wrap_midnight(self):
+        day=20000*86400000
+        self.assertTrue(smc_hours_ok(day+7*H,[7,21]));self.assertTrue(smc_hours_ok(day+21*H-1,[7,21]))
+        self.assertFalse(smc_hours_ok(day+21*H,[7,21]));self.assertFalse(smc_hours_ok(day+7*H-1,[7,21]))
+        self.assertTrue(smc_hours_ok(day+23*H,[21,7]));self.assertTrue(smc_hours_ok(day+3*H,[21,7]))
+        self.assertFalse(smc_hours_ok(day+12*H,[21,7]))
+
+    def test_malformed_window_disables_the_filter(self):
+        for bad in (None,[],[7],['a','b'],[7,7],[-1,30]):
+            self.assertTrue(smc_hours_ok(12*H,bad))
+
+    def test_break_inside_window_is_a_setup_and_outside_is_ignored(self):
+        day=20000*86400000
+        for hour,expected in ((12,True),(7,True),(21,False),(23,False),(3,False)):
+            rows=swing_bars(day,hour);now=rows[-1]['ct']+1
+            unfiltered=smc_setup(rows,now,STEP,('BOS',),None)
+            self.assertIsNotNone(unfiltered);self.assertEqual(unfiltered['time'],day+hour*H)
+            filtered=smc_setup(rows,now,STEP,('BOS',),None,0.0,[7,21])
+            self.assertEqual(filtered is not None,expected,hour)
+            if expected:self.assertEqual(filtered,unfiltered)
 
 STEP=900000
 def setup():return dict(time=STEP,dir=-1,entry=100,sl=110,tp=80,status='pending',expires=STEP*25,kind='BOS')

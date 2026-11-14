@@ -54,6 +54,24 @@ SMC = {
     "tp_r": 2.0,         # TP = эрсдэл × 2
     "valid_bars": 24,    # биелэхгүй бол 24 лааны дараа цуцална (15 минутад 6 цаг)
 }
+# config-д хослол дээр "smc_hours_utc": [7, 21] гэвэл зөвхөн эвдрэлийн лаа нь UTC 07:00–21:00-д (УБ 15:00–05:00)
+# хаагдсан бүтцийг авна. Шөнийн эвдрэлийг огт тооцохгүй тул өмнө илгээсэн, хүлээгдэж буй санааг ч солихгүй.
+# 2025-12 – 2026-11 Binance XAUUSDT perpetual дээр (BOS + 1ц бүтэц + 200 өдөр, $0.60 зардал): шүүлтүүргүй
+# +10.4R / 94 арилжаа; шүүлтүүртэй +21.6R / 42, гурван хэсэгт гуравт нь ашигтай. Шөнийн дохио 2 хэсэгт алдагдалтай.
+# Цагийн хүрээг өгөгдлөө харсны дараа сонгосон тул хэт тааруулсан байж болно; унтраах бол мөрийг config-оос хасна.
+
+
+def smc_hours_ok(t_ms, hours):
+    """t_ms (UTC) нь [эхлэх, дуусах) цагийн хүрээнд багтах эсэх. Эхлэх > дуусах бол шөнө дамнасан хүрээ.
+    hours буруу хэлбэртэй бол шүүлтүүр унтраалттай гэж үзнэ (True)."""
+    try:
+        start, end = float(hours[0]), float(hours[1])
+    except (TypeError, ValueError, IndexError):
+        return True
+    if not (0 <= start <= 24 and 0 <= end <= 24) or start == end:
+        return True
+    h = (t_ms % 86400000) / 3600000
+    return start <= h < end if start < end else (h >= start or h < end)
 
 # Volume Profile + 200 өдрийн чиг. 3 жилийн туршилтаар алтны 1 цагт хамгийн тогтвортой гарсан арга
 # (12 аргаас; 6 хагас жил бүгдэд ашигтай, параметр өөрчлөхөд ч тогтвортой).
@@ -610,12 +628,13 @@ def htf_trend_fn(htf_bars, now_ms):
     return at
 
 
-def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None, min_risk=0.0):
+def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None, min_risk=0.0, hours=None):
     """Шүүлтүүрт таарсан хамгийн сүүлийн бүтцийн эвдрэлээс SMC оролтын санаа гаргаж, төлөвийг нь буцаана.
 
     Өсөх эвдрэл: хаалт сүүлийн swing high-аас дээш гарна. Order Block = swing high-аас эвдрэл хүртэлх
     хамгийн нам ёроолтой лаа. Limit оролт = OB-ийн дээд хил (OB өндөр бол дунд), SL = OB-ийн доор.
-    Буурах эвдрэл нь эсрэгээрээ. kinds: аль төрлийн эвдрэлийг авах; htf: том хугацааны чигийн функц.
+    Буурах эвдрэл нь эсрэгээрээ. kinds: аль төрлийн эвдрэлийг авах; htf: том хугацааны чигийн функц;
+    hours: [эхлэх, дуусах) UTC цаг — эвдрэлийн лаа энэ хүрээнээс гадуур хаагдсан бол тэр бүтцийг алгасна.
     """
     n = len(bars)
     a = atr(bars, RULES["atr"])
@@ -626,6 +645,8 @@ def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None, min_risk=
         if ev["kind"] not in kinds:
             continue
         if htf and htf(bars[ev["idx"]]["ct"] + 1) != ev["dir"]:
+            continue
+        if hours and not smc_hours_ok(bars[ev["idx"]]["ct"] + 1, hours):
             continue
         event = ev
         break
@@ -2354,7 +2375,7 @@ def main():
         scalp = bool(w.get("scalp")) and not ct   # ⚡ зөвхөн Scalp чатад, IC-ийн өдрийн хаалтаар хаана
         copy = bool(w.get("scalp_copy")) and not ct
         rec = state.setdefault(bucket, {}).get(key)
-        S = smc_setup(bars, now_ms, step_ms, kinds, htf, float(w.get("smc_min_risk", 0)))
+        S = smc_setup(bars, now_ms, step_ms, kinds, htf, float(w.get("smc_min_risk", 0)), w.get("smc_hours_utc"))
         S = select_smc(rec, S, bars, now_ms, step_ms)
         if S:
             S["htf_tf"] = htf_tf
@@ -2872,7 +2893,7 @@ def main():
                     sma, base = sma_trend_fn(get_daily_for(pair)), htf
                     htf = lambda t: sma(t) if base is None or base(t) == sma(t) else 0
                 P = smc_setup(bars, now_ms, step, tuple(w.get("smc_kinds", ["BOS", "CHoCH"])), htf,
-                              float(w.get("smc_min_risk", 0)))
+                              float(w.get("smc_min_risk", 0)), w.get("smc_hours_utc"))
                 P = select_smc(state.get('smc', {}).get(f'{pair}|{tf}'), P, bars, now_ms, step)
             elif method == "amd":
                 P = state.get("scalp", {}).get(f"{pair}|{tf}")
