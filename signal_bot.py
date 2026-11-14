@@ -2642,13 +2642,15 @@ def main():
     def track_dtc(key, w, bars, now_ms, ct=False):
         bucket = "dtc_ct" if ct else "dtc"
         label = "DTC эсрэг" if ct else "DTC"
+        # config-д "dtc_scalp": true бол чигийн дагуух DTC дохио ба хаалтын мэдэгдлийг ⚡ Scalp чатад ч давхар илгээнэ.
+        to_scalp = bool(w.get("dtc_scalp")) and not ct
         daily = get_daily()
         rec = state.setdefault(bucket, {}).get(key)
         price = bars[-1]["c"]
         if rec and rec.get("status") == "open":
             out = dtc_outcome(bars, rec, now_ms)
             if out:
-                send(ct_tag(dtc_close_text(w["pair"], w["tf"], rec, out), ct), "swing")
+                send(ct_tag(dtc_close_text(w["pair"], w["tf"], rec, out), ct), "swing", also_scalp=to_scalp)
                 if rec.get("sent"):
                     record(state, bucket, key, (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"]),
                            rec, out["exit"], out["status"])
@@ -2666,7 +2668,7 @@ def main():
                 closed = [b for b in bars if b["ct"] < now_ms]
                 png = render_chart(closed, TF[w["tf"]][0] * 1000, chart_title(w, "DTC", S["dir"]), S, "dtc",
                                    {"dec": PAIRS[w["pair"]]["dec"]}, n_before=60)
-                send(dtc_message(w["pair"], w["tf"], S, price, ct), "swing", photo=png)
+                send(dtc_message(w["pair"], w["tf"], S, price, ct), "swing", photo=png, also_scalp=to_scalp)
                 print(f"  → {label} дохио илгээлээ")
                 S["sent"] = True
             state[bucket][key] = {k: S.get(k) for k in ("time", "dir", "entry", "sl", "tp", "status", "sent")}
