@@ -5,7 +5,7 @@ from pathlib import Path
 from contextlib import ExitStack
 from unittest.mock import patch
 from smc_frozen import freeze,evaluate,select
-from signal_bot import smc_setup,smc_hours_ok
+from signal_bot import smc_setup,smc_hours_ok,dtc_stale,DTC
 
 H=3600000
 def swing_bars(day_start,break_hour):
@@ -18,6 +18,15 @@ def swing_bars(day_start,break_hour):
         if i==39:o,h,l,c=100.0,100.5,94.0,95.0
         rows.append(dict(ct=first+(i+1)*STEP-1,o=o,h=h,l=l,c=c,v=1.0))
     return rows
+
+class DtcFreshnessTests(unittest.TestCase):
+    def test_only_a_signal_from_the_last_candles_counts_as_new(self):
+        fresh=DTC['fresh_bars']
+        self.assertFalse(dtc_stale(dict(age=0,time=1000*STEP),1000*STEP+60000,STEP))
+        self.assertFalse(dtc_stale(dict(age=fresh-1,time=1000*STEP),1000*STEP+fresh*STEP,STEP))
+        self.assertTrue(dtc_stale(dict(age=fresh,time=1000*STEP),1000*STEP+60000,STEP))
+        # weekend gap: few candles closed since, but far too much time has passed
+        self.assertTrue(dtc_stale(dict(age=0,time=1000*STEP),1000*STEP+fresh*STEP+1,STEP))
 
 class HoursTests(unittest.TestCase):
     def test_window_is_half_open_and_may_wrap_midnight(self):

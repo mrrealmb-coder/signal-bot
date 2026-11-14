@@ -1085,6 +1085,11 @@ def dtc_signal(bars, daily, now_ms, side=1):
     return None
 
 
+def dtc_stale(S, now_ms, step_ms):
+    """Дохио шинэ биш: дохионы лаанаас хойш DTC['fresh_bars'] ба түүнээс олон лаа хаагдсан, эсвэл тэр хэмжээний цаг өнгөрсөн."""
+    return S["age"] >= DTC["fresh_bars"] or now_ms - S["time"] > DTC["fresh_bars"] * step_ms
+
+
 def dtc_outcome(bars, S, now_ms):
     d, n = S["dir"], 0
     for b in bars:
@@ -2652,8 +2657,11 @@ def main():
         S = dtc_signal(bars, daily, now_ms, side=-1 if ct else 1)
         print(f"{key}: {label} {('BUY' if S['dir'] == 1 else 'SELL') + ' ' + fmt_time(S['time']) + ' · ' + S['status'] if S else 'дохио алга'}")
         if S and (not rec or rec.get("time") != S["time"]) and not (rec and rec.get("status") == "open"):
-            if not rec and (S["age"] >= DTC["fresh_bars"] or now_ms - S["time"] > DTC["fresh_bars"] * TF[w["tf"]][0] * 1000):
-                print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
+            if dtc_stale(S, now_ms, TF[w["tf"]][0] * 1000):
+                # Арга дахин асаагдсан эсвэл бот завсарласан үед хуучин дохиог шинэ мэт илгээхгүй. "skipped" гэж
+                # тэмдэглэснээр илгээгээгүй дохионы хаалтын мэдэгдэл ч гарахгүй.
+                print("  (хуучин дохио тул илгээхгүй, зөвхөн тэмдэглэв)")
+                S["status"] = "skipped"
             elif S["status"] == "open":
                 closed = [b for b in bars if b["ct"] < now_ms]
                 png = render_chart(closed, TF[w["tf"]][0] * 1000, chart_title(w, "DTC", S["dir"]), S, "dtc",
