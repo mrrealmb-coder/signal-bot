@@ -121,9 +121,15 @@ AMD = {"rng": (2, 7), "man": (7, 11), "sl_buf_atr": 0.1, "max_r_atr": 6.0, "min_
 VA80 = {"need": 2, "sl_buf_atr": 0.1, "max_r_atr": 3.0, "min_tp_r": 0.5, "fresh_bars": 2}
 
 
+_NY_TZ = None
+
+
 def ny_time(t_ms):
-    from zoneinfo import ZoneInfo
-    return datetime.fromtimestamp(t_ms / 1000, ZoneInfo("America/New_York"))
+    global _NY_TZ
+    if _NY_TZ is None:
+        from zoneinfo import ZoneInfo
+        _NY_TZ = ZoneInfo("America/New_York")
+    return datetime.fromtimestamp(t_ms / 1000, _NY_TZ)
 
 
 def srv_offset_ms(t_ms):
@@ -269,6 +275,41 @@ def http_json(url, data=None, timeout=20):
 BASIS = {}
 
 
+def stamp_basis(P, bars):
+    """Дохионы түвшинг (entry/SL/TP) аль basis-ээр тооцсоныг дохион дээр хадгална. SMC (smc_frozen), AMD-тэй ижил
+    зарчим: зөрүү дараа нь өөрчлөгдөхөд хадгалсан түвшинтэй харьцуулах лааг тэр үеийн basis руу буцааж шилжүүлнэ."""
+    last = bars[-1] if bars else {}
+    pb = last.get("_basis")
+    if P is not None and last.get("_source") and isinstance(pb, (int, float)) and math.isfinite(pb):
+        P["_source"], P["_basis"] = last["_source"], pb
+    return P
+
+
+def rebase(bars, P):
+    """Хадгалсан дохионы түвшинтэй харьцуулахын тулд лааг дохио гарах үеийн basis руу шилжүүлнэ.
+    _basis-гүй хуучин бичлэг, эсвэл өөр эх үүсвэрийн лаа (жишээ нь Twelve Data-ийн нөөц — аль хэдийн спот үнэ)-г
+    өөрчлөхгүй буцаана."""
+    pb = (P or {}).get("_basis")
+    if not isinstance(pb, (int, float)) or not math.isfinite(pb):
+        return bars
+    out = []
+    for b in bars:
+        bb = b.get("_basis")
+        if (b.get("_source") != P.get("_source") or not isinstance(bb, (int, float)) or not math.isfinite(bb)
+                or bb == pb):
+            out.append(b)
+            continue
+        x = dict(b)
+        for k in ("o", "h", "l", "c"):
+            if k in x:
+                x[k] = b[k] + bb - pb
+        out.append(x)
+    return out
+
+
+BASIS_KEYS = ("_source", "_basis")
+
+
 def fetch_binance(sym, tf):
     last_err = None
     off = BASIS.get(sym, 0.0)
@@ -373,10 +414,13 @@ def fetch_yahoo(sym, tf):
 
 
 def market_open(open_ms):
-    """Алт, валютын зах зээл: Баасан 21:00 UTC-ээс Ням 22:00 UTC хүртэл хаалттай."""
-    wd = (open_ms // 86400000 + 3) % 7  # 0 = Даваа (1970-01-01 нь Пүрэв)
-    hr = (open_ms // 3600000) % 24
-    return not (wd == 5 or (wd == 4 and hr >= 21) or (wd == 6 and hr < 22))
+    """Алт, валютын зах зээл: Нью-Йоркийн цагаар Баасан 17:00-ээс Ням 18:00 хүртэл хаалттай.
+    UTC-ээр өвөл Баасан 22:00 – Ням 23:00, зун Баасан 21:00 – Ням 22:00 (АНУ-ын цагийн шилжилтийг автоматаар тусгана).
+    Өмнө нь UTC-ийн тогтмол цаг (зуны хуваарь) ашигладаг байсан тул өвөл Баасан гарагийн сүүлийн жинхэнэ цагийг хасаж,
+    Ням 22–23 UTC-ийн амралтын өдрийн Binance лааг Даваа гарагийн эхэнд оруулдаг байв."""
+    t = ny_time(open_ms)
+    wd, hr = t.weekday(), t.hour  # 0 = Даваа
+    return not (wd == 5 or (wd == 4 and hr >= 17) or (wd == 6 and hr < 18))
 
 
 def fetch_bars(pair_key, tf, td_key):
@@ -696,6 +740,12 @@ def smc_setup(bars, now_ms, step_ms, kinds=("BOS", "CHoCH"), htf=None, min_risk=
             if not (b["l"] <= entry if d == 1 else b["h"] >= entry):
                 continue
             setup["status"], setup["fill_time"] = "filled", bar_open
+            # Биелсэн лаанд зөвхөн SL-ийг шалгана: OHLC-оос TP нь оролтын өмнө үү, дараа уу гэдгийг мэдэх боломжгүй
+            # (жишээ нь эхлээд TP хүртэл өсөөд дараа нь оролт руу буусан бол позиц нээлттэй хэвээр). TP-г дараагийн лаанаас.
+            if b["l"] <= stop if d == 1 else b["h"] >= stop:
+                setup["status"], setup["close_time"] = "sl", b["ct"] + 1
+                break
+            continue
         if b["l"] <= stop if d == 1 else b["h"] >= stop:
             setup["status"], setup["close_time"] = "sl", b["ct"] + 1
             break
@@ -2269,7 +2319,9 @@ def main():
                               "px": VP["sym"] if (m == "vp" and w["pair"] == "XAUUSD") else None,
                               # ⚡ Scalp хослол: зөвхөн Scalp чатад, үр дүн "_s"; scalp_copy: Day дохиог Scalp чатад ч
                               "kind": "scalp" if scalp else "day", "led": m + ("_s" if scalp else "_d"),
-                              "copy": bool(w.get("scalp_copy")) and not scalp}
+                              "copy": bool(w.get("scalp_copy")) and not scalp,
+                              # оролт/SL-ийг тооцсон basis — хаах үнийг ижил basis-ээр авна
+                              **{k: P[k] for k in BASIS_KEYS if k in P}}
         return add_day_line(msg, cut, limit, scalp)
 
     def day_open(m, key, t):
@@ -2319,9 +2371,9 @@ def main():
             try:
                 if d.get("px"):
                     pb = cache.get(("vp_1h", d["px"])) or fetch_binance(d["px"], "1h")
-                    price = pb[-1]["c"]
                 else:
-                    price = get_bars(d["pair"], d["tf"])[-1]["c"]
+                    pb = get_bars(d["pair"], d["tf"])
+                price = rebase(pb[-1:], d)[-1]["c"]
             except Exception as e:  # noqa: BLE001
                 print("Day: үнэ алга", dk, e)
                 continue
@@ -2469,7 +2521,7 @@ def main():
         price = pbars[-1]["c"]
         prev, prev_kind = None, "swing"
         if rec and rec.get("status") == "open":
-            st, t_ms, px = vp_outcome(pbars, rec, now_ms)
+            st, t_ms, px = vp_outcome(rebase(pbars, rec), rec, now_ms)
             if st != "open":
                 prev = ct_tag(vp_close_text(w["pair"], w["tf"], rec, st, t_ms, px), ct)
                 prev_kind = "swing" if ct else kind_for(bucket, key, rec["time"])
@@ -2481,7 +2533,7 @@ def main():
                     if not ct:
                         day_result(bucket, key, rec["time"], r, px, st)
                 rec["status"] = st
-        S = vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1, step=vstep)
+        S = stamp_basis(vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1, step=vstep), pbars)
         trend = sma_trend_fn(daily)(now_ms)
         print(f"{key}: {label} {'BUY' if S and S['dir'] == 1 else 'SELL' if S else 'дохио алга'}"
               f"{' ' + fmt_time(S['time']) if S else ''} · 200 өдрийн чиг {'↑' if trend == 1 else '↓' if trend == -1 else '?'}")
@@ -2508,7 +2560,8 @@ def main():
                 print(f"  → {label} дохио илгээлээ")
                 prev, sent = None, True
             state[bucket][key] = {"time": S["time"], "dir": S["dir"], "entry": S["entry"], "sl": S["sl"],
-                                  "tp": S["tp"], "status": st, "sent": sent}
+                                  "tp": S["tp"], "status": st, "sent": sent,
+                                  **{k: S[k] for k in BASIS_KEYS if k in S}}
         if prev:
             send(prev, prev_kind)
             print(f"  → {label} позиц хаагдлаа")
@@ -2611,7 +2664,7 @@ def main():
         vs = state.setdefault("va", {})
         rec = vs.get(key)
         if rec and rec.get("status") == "open":
-            out = va80_outcome(qb, rec, now_ms)
+            out = va80_outcome(rebase(qb, rec), rec, now_ms)
             if out:
                 r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
                 if rec.get("sent"):
@@ -2621,7 +2674,7 @@ def main():
                              close_time=out.get("close_time"))
                 rec["status"] = out["status"]
                 print(f"  → VA 80% позиц хаагдлаа ({out['status']}, {r:+.2f}R)")
-        P = va80_signal(hb, qb, now_ms)
+        P = stamp_basis(va80_signal(hb, qb, now_ms), qb)
         print(f"{key}: 🧪 VA 80% {('BUY' if P['dir'] == 1 else 'SELL') + ' ' + fmt_time(P['time']) if P else 'дохио алга'}")
         if P and (not rec or rec.get("time") != P["time"]) and not (rec and rec.get("status") == "open"):
             P.update(va80_outcome(qb, P, now_ms))
@@ -2638,6 +2691,7 @@ def main():
                 feed_put(state, "va", key, P, "open", "market", "scalp", now_ms)
                 print("  → 🧪 VA 80% дохио илгээлээ")
             vs[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "end", "status", "sent")}
+            vs[key].update({k: P[k] for k in BASIS_KEYS if k in P})
 
     def track_dtc(key, w, bars, now_ms, ct=False):
         bucket = "dtc_ct" if ct else "dtc"
@@ -2648,7 +2702,7 @@ def main():
         rec = state.setdefault(bucket, {}).get(key)
         price = bars[-1]["c"]
         if rec and rec.get("status") == "open":
-            out = dtc_outcome(bars, rec, now_ms)
+            out = dtc_outcome(rebase(bars, rec), rec, now_ms)
             if out:
                 send(ct_tag(dtc_close_text(w["pair"], w["tf"], rec, out), ct), "swing", also_scalp=to_scalp)
                 if rec.get("sent"):
@@ -2656,7 +2710,7 @@ def main():
                            rec, out["exit"], out["status"])
                 rec["status"] = out["status"]
                 print(f"  → {label} позиц хаагдлаа ({out['status']})")
-        S = dtc_signal(bars, daily, now_ms, side=-1 if ct else 1)
+        S = stamp_basis(dtc_signal(bars, daily, now_ms, side=-1 if ct else 1), bars)
         print(f"{key}: {label} {('BUY' if S['dir'] == 1 else 'SELL') + ' ' + fmt_time(S['time']) + ' · ' + S['status'] if S else 'дохио алга'}")
         if S and (not rec or rec.get("time") != S["time"]) and not (rec and rec.get("status") == "open"):
             if dtc_stale(S, now_ms, TF[w["tf"]][0] * 1000):
@@ -2672,6 +2726,7 @@ def main():
                 print(f"  → {label} дохио илгээлээ")
                 S["sent"] = True
             state[bucket][key] = {k: S.get(k) for k in ("time", "dir", "entry", "sl", "tp", "status", "sent")}
+            state[bucket][key].update({k: S[k] for k in BASIS_KEYS if k in S})
 
     errors, now_ms = [], int(time.time() * 1000)
     last_fetch = load_json(FETCH_FILE, {})
@@ -2896,7 +2951,7 @@ def main():
                         P = vp_signal(bars, get_daily_for(pair), now_ms, step, step=PAIRS[pair].get("vp_step"))
                     if P:
                         P = dict(P)
-                        P["status"] = vp_outcome(bars, P, now_ms)[0]
+                        P["status"] = vp_outcome(rebase(bars, P), P, now_ms)[0]
             elif method == "smc":
                 htf = htf_trend_fn(get_bars(pair, w["smc_htf"]), now_ms) if w.get("smc_htf") else None
                 if w.get("smc_sma"):

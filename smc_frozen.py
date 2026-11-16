@@ -46,6 +46,10 @@ def evaluate(saved,bars,now_ms,step_ms,stale_r=None):
                     out.update(status='stale_cancelled',close_time=b['ct']+1);break
                 continue
             out.update(status='filled',fill_time=op)
+            # Fill bar: SL only. OHLC cannot tell whether TP traded before or after the fill; TP from the next bar.
+            if b['l']<=stop if d==1 else b['h']>=stop:
+                out.update(status='sl',close_time=b['ct']+1);break
+            continue
         if b['l']<=stop if d==1 else b['h']>=stop:
             out.update(status='sl',close_time=b['ct']+1);break
         if b['h']>=tp if d==1 else b['l']<=tp:
