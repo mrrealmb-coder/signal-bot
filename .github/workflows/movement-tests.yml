@@ -16,4 +16,4 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m unittest -q test_update.py test_movement_watch.py test_entry_plans.py test_smc_frozen.py test_profile_shadow.py test_amd_confirmation.py
+      - run: python -m unittest -q test_update.py test_movement_watch.py test_entry_plans.py test_smc_frozen.py test_profile_shadow.py test_amd_confirmation.py test_signal_fixes.py
