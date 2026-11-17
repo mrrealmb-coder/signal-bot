@@ -361,6 +361,24 @@
         "tf": "15m",
         "tp": 3847.03,
         "updated": 1794926166299
+      },
+      {
+        "chat": "swing",
+        "dir": "SELL",
+        "entry": 3841.84,
+        "expires": null,
+        "id": "vp|XAUUSD|1h|1794949200000",
+        "lots": 0.01,
+        "method": "vp",
+        "name": "📦 VP",
+        "order": "market",
+        "pair": "XAUUSD",
+        "signal_time": 1794949200000,
+        "sl": 3863.74,
+        "status": "open",
+        "tf": "1h",
+        "tp": 3798.04,
+        "updated": 1794955506545
       }
     ],
     "v": 1
@@ -1330,13 +1348,15 @@
       "tp": 103.7377539190972
     },
     "XAUUSD|1h": {
+      "_basis": -2.21,
+      "_source": "binance:PAXGUSDT",
       "dir": -1,
-      "entry": 3873.8300000000004,
+      "entry": 3841.84,
       "sent": true,
-      "sl": 3901.239700938141,
-      "status": "time",
-      "time": 1794798000000,
-      "tp": 3819.010598123719
+      "sl": 3863.7421647329024,
+      "status": "open",
+      "time": 1794949200000,
+      "tp": 3798.0356705341956
     }
   },
   "vp_announced": true,
