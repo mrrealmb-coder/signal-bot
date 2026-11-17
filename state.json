@@ -300,6 +300,24 @@
         "tf": "5m",
         "tp": 3868.2,
         "updated": 1794842646683
+      },
+      {
+        "chat": "scalp",
+        "dir": "BUY",
+        "entry": 3866.22,
+        "expires": null,
+        "id": "va|XAUUSD|15m|1794880800000",
+        "lots": 0.01,
+        "method": "va",
+        "name": "🧪 VA 80%",
+        "order": "market",
+        "pair": "XAUUSD",
+        "signal_time": 1794880800000,
+        "sl": 3843.76,
+        "status": "open",
+        "tf": "15m",
+        "tp": 3880.0,
+        "updated": 1794880806168
       }
     ],
     "v": 1
@@ -1151,14 +1169,16 @@
   "update_offset": 291487618,
   "va": {
     "XAUUSD|15m": {
+      "_basis": -11.63,
+      "_source": "binance:PAXGUSDT",
       "dir": 1,
-      "end": 1794433500000,
-      "entry": 4017.9,
+      "end": 1794951900000,
+      "entry": 3866.2200000000003,
       "sent": true,
-      "sl": 4010.1975289927486,
-      "status": "sl",
-      "time": 1794410100000,
-      "tp": 4101.0
+      "sl": 3843.7552922037116,
+      "status": "open",
+      "time": 1794880800000,
+      "tp": 3880.0
     }
   },
   "vp": {
