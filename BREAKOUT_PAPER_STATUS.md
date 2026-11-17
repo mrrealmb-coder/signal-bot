@@ -1,7 +1,7 @@
 # Independent Breakout paper test
 
 Started (UTC): 2026-11-07T18:15:15.807000+00:00
-Last checked (UTC): 2026-11-16T18:39:56.626000+00:00
+Last checked (UTC): 2026-11-17T02:30:05.019000+00:00
 
 Independently detected paper setups: 20; profile eligible: 7; completed resolved pairs: 4; fetch/validation errors: 0.
 No Telegram messages, no broker orders, no change to original Entry/SL/TP. Prior UTC-day XAUT candle-volume proxy, not broker footprint. Uses raw XAUT prices, NOT spot-adjusted broker prices. No state.json or Telegram acknowledgement dependency. Signals before this independent test initialization excluded.
@@ -27,7 +27,7 @@ No Telegram messages, no broker orders, no change to original Entry/SL/TP. Prior
 |entry-v1:1794576600000:-1|2026-11-13T13:30:00+00:00|eligible|crossed_before_publication|crossed_before_publication|0.0 (incomplete)|
 |entry-v1:1794825900000:1|2026-11-16T10:45:00+00:00|no_level|sl|not admitted|76.1|
 |entry-v1:1794844800000:-1|2026-11-16T16:00:00+00:00|too_close|sl|not admitted|23.7|
-|entry-v1:1794852900000:-1|2026-11-16T18:15:00+00:00|too_close|pending|not admitted|0.0 (incomplete)|
+|entry-v1:1794852900000:-1|2026-11-16T18:15:00+00:00|too_close|cancelled|not admitted|0.0 (incomplete)|
 
 Same completed pairs, $0.60/oz modeled costs:
 - baseline: net -1.53R; mean reach error 192.50 pip.
@@ -36,4 +36,4 @@ Same completed pairs, $0.60/oz modeled costs:
 Ambiguous or data-gap outcomes are retained in breakout_paper_state.json and excluded from resolved-pair totals. Unequal entry availability and no-level/too-close skips are not wins. This is a delayed paper observation of frozen signal-time rules, not proof of live executions.
 
 Modeled activation is signal close +60s; processing is delayed, so this is not a live execution-latency test.
-Skipped downtime windows: 1. Detector watermark: 1794853800000.
+Skipped downtime windows: 1. Detector watermark: 1794882600000.
