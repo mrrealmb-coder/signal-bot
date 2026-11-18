@@ -31,18 +31,20 @@
       "time": 1794923100000
     },
     "vp|XAUUSD|1h": {
+      "_basis": -5.34,
+      "_source": "binance:PAXGUSDT",
       "copy": false,
-      "cut": 1794865500000,
+      "cut": 1795038300000,
       "dir": -1,
-      "entry": 3873.8300000000004,
+      "entry": 3813.78,
       "kind": "day",
       "led": "vp_d",
       "pair": "XAUUSD",
       "px": "PAXGUSDT",
-      "sl": 3901.239700938141,
-      "status": "done",
+      "sl": 3836.2404230512398,
+      "status": "open",
       "tf": "1h",
-      "time": 1794798000000
+      "time": 1794963600000
     }
   },
   "day_announced": true,
@@ -364,8 +366,10 @@
       },
       {
         "chat": "swing",
+        "close_time": 1794967566822,
         "dir": "SELL",
         "entry": 3841.84,
+        "exit": 3798.04,
         "expires": null,
         "id": "vp|XAUUSD|1h|1794949200000",
         "lots": 0.01,
@@ -373,12 +377,31 @@
         "name": "📦 VP",
         "order": "market",
         "pair": "XAUUSD",
+        "r": 2.0,
         "signal_time": 1794949200000,
         "sl": 3863.74,
-        "status": "open",
+        "status": "tp",
         "tf": "1h",
         "tp": 3798.04,
-        "updated": 1794955506545
+        "updated": 1794967566822
+      },
+      {
+        "chat": "day",
+        "dir": "SELL",
+        "entry": 3813.78,
+        "expires": null,
+        "id": "vp|XAUUSD|1h|1794963600000",
+        "lots": 0.01,
+        "method": "vp",
+        "name": "📦 VP",
+        "order": "market",
+        "pair": "XAUUSD",
+        "signal_time": 1794963600000,
+        "sl": 3836.24,
+        "status": "open",
+        "tf": "1h",
+        "tp": 3768.86,
+        "updated": 1794967566822
       }
     ],
     "v": 1
@@ -799,6 +822,19 @@
       "r": 2.0,
       "sl": 3872.69,
       "t": 1794961990428
+    },
+    {
+      "dir": "SELL",
+      "entry": 3841.84,
+      "exit": 3798.04,
+      "how": "TP",
+      "k": "XAUUSD|1h",
+      "m": "vp",
+      "open": 1794949200000,
+      "pips": 438.0,
+      "r": 2.0,
+      "sl": 3863.74,
+      "t": 1794967570648
     }
   ],
   "ledger": [
@@ -1101,6 +1137,12 @@
       "m": "dtc",
       "r": 2.0,
       "t": 1794961990428
+    },
+    {
+      "k": "XAUUSD|1h",
+      "m": "vp",
+      "r": 2.0,
+      "t": 1794967570648
     }
   ],
   "ledger_start": 1793195530901,
@@ -1367,15 +1409,15 @@
       "tp": 103.7377539190972
     },
     "XAUUSD|1h": {
-      "_basis": -2.21,
+      "_basis": -5.34,
       "_source": "binance:PAXGUSDT",
       "dir": -1,
-      "entry": 3841.84,
+      "entry": 3813.78,
       "sent": true,
-      "sl": 3863.7421647329024,
+      "sl": 3836.2404230512398,
       "status": "open",
-      "time": 1794949200000,
-      "tp": 3798.0356705341956
+      "time": 1794963600000,
+      "tp": 3768.859153897521
     }
   },
   "vp_announced": true,
