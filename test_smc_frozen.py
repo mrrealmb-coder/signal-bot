@@ -113,7 +113,7 @@ class FrozenTests(unittest.TestCase):
         state={'started':True,'chat_ids':['test'],'owner':'test',**{k:True for k in ('smc_announced','vp_announced','day_announced','mk2_announced','mk3_announced')}}
         config={'watch':[{'pair':'XAUUSD','tf':'15m','ema':False,'smc':True}]}
         original=dict(setup(),time=t,expires=t+24*STEP,level=105,level_time=t-STEP,ob=(100,108),ob_time=t-STEP,fvg=None)
-        def invoke(now,basis,candidate):
+        def invoke(now,basis,candidate,admitted=True):
             rows=[]
             for i in range(-100,3):
                 op=t+i*STEP
@@ -124,7 +124,7 @@ class FrozenTests(unittest.TestCase):
                 stack.enter_context(patch.dict(bot.os.environ,{'TELEGRAM_TOKEN':'fake'}))
                 stack.enter_context(patch.object(bot,'load_json',side_effect=lambda path,default:config if path==bot.CONFIG_FILE else state if path==bot.STATE_FILE else {}))
                 stack.enter_context(patch.object(bot,'save_state'))
-                stack.enter_context(patch.object(bot,'check_entry',return_value=True))
+                stack.enter_context(patch.object(bot,'check_entry',return_value=admitted))
                 stack.enter_context(patch.object(bot,'FETCH_FILE',str(Path(scratch)/'fetch.json')))
                 stack.enter_context(patch.object(bot.time,'time',return_value=now/1000))
                 stack.enter_context(patch.object(bot,'tg',return_value={'result':[]}))
@@ -135,6 +135,9 @@ class FrozenTests(unittest.TestCase):
                 stack.enter_context(patch.object(bot,'render_chart',return_value=None))
                 stack.enter_context(patch.object(bot,'smc_message',return_value='test setup'))
                 self.assertEqual(bot.main(),0)
+        invoke(t+1000,0,original,admitted=False)
+        self.assertFalse(state['smc'])
+        self.assertFalse(state.get('feed', {}).get('signals'))
         invoke(t+5000,0,original)
         self.assertEqual(state['smc']['XAUUSD|15m']['frozen']['sl'],110)
         invoke(t+2*STEP+5000,7,None)

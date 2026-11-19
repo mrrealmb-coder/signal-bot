@@ -2202,6 +2202,7 @@ def main():
     state.setdefault("vp", {})
     state.setdefault("st", {})
     state.setdefault("dtc", {})
+    state['auction_policy'] = {'version': 'xau-auction-v1', 'source': 'PAXGUSDT', 'methods': ['smc', 'vp', 'amd', 'va80', 'dtc']}
     state.pop("sent", None)
 
     sync_chats(token, state)
@@ -2349,6 +2350,13 @@ def main():
         else:
             send(msg, "swing", photo=photo)
 
+    def flow_line(method, key, signal):
+        row = state.get('auction_v1', {}).get(f"{method}|{key}|{signal['time']}|{signal['dir']}", {})
+        if row.get('verdict') != 'allow':
+            return ''
+        label = {'neutral': 'саармаг', 'acceptance': 'түвшний гадна тогтсон', 'reclaim': 'түвшнээ буцааж авсан'}[row['pattern']]
+        return f'\nАвтомат order flow · PAXGUSDT · {label}'
+
     def chart_title(w, method, d):
         return f"{PAIRS[w['pair']]['name']} · {TF[w['tf']][4]} · {method} {'BUY' if d == 1 else 'SELL'}"
 
@@ -2464,7 +2472,7 @@ def main():
                 cancel_prev = None
                 if rec and rec.get("status") == "pending":
                     cancel_prev = "BUY" if rec.get("dir") == 1 else "SELL"
-                msg = smc_message(w["pair"], w["tf"], S, price, cancel_prev)
+                msg = smc_message(w["pair"], w["tf"], S, price, cancel_prev) + flow_line('smc', key, S)
                 dmsg = msg if ct else day_msg(w, bucket, key, msg, S, limit=S["status"] == "pending")
                 if scalp and dmsg == msg:
                     # IC-ийн сессээс гадуур (туршилтад оруулаагүй) — илгээхгүй
@@ -2563,7 +2571,7 @@ def main():
                 if prev:
                     send(prev, prev_kind)
                     print(f"  → {label} позиц хаагдлаа")
-                msg = vp_message(w["pair"], w["tf"], S, price, None, ct)
+                msg = vp_message(w["pair"], w["tf"], S, price, None, ct) + flow_line('vp', key, S)
                 closed = [b for b in pbars if b["ct"] < now_ms]
                 sk = next((day_key(b, step_ms) for b in closed if b["ct"] + 1 >= S["time"]), None)
                 ds = next((b["ct"] + 1 - step_ms for b in closed if day_key(b, step_ms) == sk), S["time"])
@@ -2664,7 +2672,7 @@ def main():
                 png = render_chart(closed, step_ms, chart_title(w, "AMD scalp", P["dir"]), P, "amd",
                                    {k: P[k] for k in ("hi", "lo", "ext", "ext_time", "r_start", "r_end")}
                                    | {"dec": PAIRS[w["pair"]]["dec"]}, n_before=20)
-                send(amd_message(w["pair"], w["tf"], P, price), "scalp", photo=png)
+                send(amd_message(w["pair"], w["tf"], P, price) + flow_line('amd', key, P), "scalp", photo=png)
                 P["sent"] = True
                 feed_put(state, "amd", key, P, "open", "market", "scalp", now_ms)
                 print("  → AMD scalp дохио илгээлээ")
@@ -2706,7 +2714,7 @@ def main():
                 ds = (day_key(closed[-1], 900000)) * 86400000 - 2 * 3600000
                 png = render_chart(closed, 900000, chart_title(w, "VA 80%", P["dir"]), P, "vp",
                                    {"va": P["va"], "day_start": ds, "dec": PAIRS[w["pair"]]["dec"]}, n_before=40)
-                send(va80_message(w["pair"], w["tf"], P, closed[-1]["c"]), "scalp", photo=png)
+                send(va80_message(w["pair"], w["tf"], P, closed[-1]["c"]) + flow_line('va80', key, P), "scalp", photo=png)
                 P["sent"] = True
                 feed_put(state, "va", key, P, "open", "market", "scalp", now_ms)
                 print("  → 🧪 VA 80% дохио илгээлээ")
@@ -2744,7 +2752,7 @@ def main():
                 closed = [b for b in bars if b["ct"] < now_ms]
                 png = render_chart(closed, TF[w["tf"]][0] * 1000, chart_title(w, "DTC", S["dir"]), S, "dtc",
                                    {"dec": PAIRS[w["pair"]]["dec"]}, n_before=60)
-                send(dtc_message(w["pair"], w["tf"], S, price, ct), "swing", photo=png, also_scalp=to_scalp)
+                send(dtc_message(w["pair"], w["tf"], S, price, ct) + flow_line('dtc', key, S), "swing", photo=png, also_scalp=to_scalp)
                 print(f"  → {label} дохио илгээлээ")
                 S["sent"] = True
             state[bucket][key] = {k: S.get(k) for k in ("time", "dir", "entry", "sl", "tp", "status", "sent")}
