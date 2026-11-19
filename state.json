@@ -23,6 +23,19 @@
       "tp": 3723.2149795947594,
       "verdict": "allow",
       "version": "xau-auction-v1"
+    },
+    "smc|XAUUSD|15m|1795098600000|-1": {
+      "cut": 1795098600000,
+      "entry": 3719.07,
+      "high": 3704.53,
+      "low": 3701.08,
+      "pattern": "neutral",
+      "side": 0,
+      "sl": 3728.0436293753087,
+      "source": "PAXGUSDT",
+      "tp": 3701.122741249383,
+      "verdict": "allow",
+      "version": "xau-auction-v1"
     }
   },
   "chat_ids": [
@@ -41,20 +54,20 @@
   "ct_announced": true,
   "day": {
     "smc|XAUUSD|15m": {
-      "_basis": -6.2,
+      "_basis": -4.11,
       "_source": "binance:XAUTUSDT",
       "copy": true,
       "cut": 1795124700000,
       "dir": -1,
-      "entry": 3734.66,
+      "entry": 3719.07,
       "kind": "day",
       "led": "smc_d",
       "pair": "XAUUSD",
       "px": null,
-      "sl": 3740.09,
+      "sl": 3728.04,
       "status": "pending",
       "tf": "15m",
-      "time": 1795089600000
+      "time": 1795098600000
     },
     "vp|XAUUSD|1h": {
       "_basis": -3.14,
@@ -464,6 +477,24 @@
         "tf": "15m",
         "tp": 3723.8,
         "updated": 1795090625738
+      },
+      {
+        "chat": "day",
+        "dir": "SELL",
+        "entry": 3719.07,
+        "expires": 1795120200000,
+        "id": "smc|XAUUSD|15m|1795098600000",
+        "lots": 0.04,
+        "method": "smc",
+        "name": "🧠 SMC",
+        "order": "limit",
+        "pair": "XAUUSD",
+        "signal_time": 1795098600000,
+        "sl": 3728.04,
+        "status": "pending",
+        "tf": "15m",
+        "tp": 3701.12,
+        "updated": 1795098606308
       }
     ],
     "v": 1
@@ -1420,39 +1451,39 @@
     "XAUUSD|15m": {
       "dir": -1,
       "frozen": {
-        "_basis": -6.2,
+        "_basis": -4.11,
         "_frozen_version": 1,
         "_source": "binance:XAUTUSDT",
         "close_time": null,
         "ct": false,
         "dir": -1,
-        "entry": 3734.66,
-        "expires": 1795111200000,
+        "entry": 3719.07,
+        "expires": 1795120200000,
         "fill_time": null,
         "fvg": [
-          3731.1499999999996,
-          3734.66
+          3710.73,
+          3710.8900000000003
         ],
         "htf_tf": "1h",
         "kind": "BOS",
-        "level": 3726.7999999999997,
-        "level_time": 1795082400000,
+        "level": 3710.4900000000002,
+        "level_time": 1795092300000,
         "ob": [
-          3734.66,
-          3738.5499999999997
+          3711.73,
+          3726.4100000000003
         ],
-        "ob_mid": false,
-        "ob_time": 1795086000000,
-        "sl": 3740.09,
+        "ob_mid": true,
+        "ob_time": 1795095900000,
+        "sl": 3728.04,
         "sma": true,
         "status": "pending",
         "test": false,
-        "time": 1795089600000,
-        "tp": 3723.8
+        "time": 1795098600000,
+        "tp": 3701.12
       },
       "sent": true,
       "status": "pending",
-      "time": 1795089600000
+      "time": 1795098600000
     },
     "XAUUSD|1h": {
       "dir": -1,
