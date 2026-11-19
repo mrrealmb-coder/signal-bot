@@ -10,6 +10,21 @@
     "source": "PAXGUSDT",
     "version": "xau-auction-v1"
   },
+  "auction_v1": {
+    "smc|XAUUSD|15m|1795089600000|-1": {
+      "cut": 1795089600000,
+      "entry": 3734.07,
+      "high": 3721.48,
+      "low": 3715.86,
+      "pattern": "neutral",
+      "side": 0,
+      "sl": 3739.4975102026206,
+      "source": "PAXGUSDT",
+      "tp": 3723.2149795947594,
+      "verdict": "allow",
+      "version": "xau-auction-v1"
+    }
+  },
   "chat_ids": [
     "5371043257",
     "-5544664828",
