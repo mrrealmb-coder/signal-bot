@@ -31,20 +31,20 @@
       "time": 1795019400000
     },
     "vp|XAUUSD|1h": {
-      "_basis": -5.34,
+      "_basis": -3.14,
       "_source": "binance:PAXGUSDT",
       "copy": false,
-      "cut": 1795038300000,
+      "cut": 1795124700000,
       "dir": -1,
-      "entry": 3813.78,
+      "entry": 3718.71,
       "kind": "day",
       "led": "vp_d",
       "pair": "XAUUSD",
       "px": "PAXGUSDT",
-      "sl": 3836.2404230512398,
-      "status": "done",
+      "sl": 3748.1649723949445,
+      "status": "open",
       "tf": "1h",
-      "time": 1794963600000
+      "time": 1795060800000
     }
   },
   "day_announced": true,
@@ -281,27 +281,6 @@
   "feed": {
     "signals": [
       {
-        "chat": "day",
-        "close_time": 1794884399999,
-        "dir": "SELL",
-        "entry": 3873.83,
-        "exit": 3870.22,
-        "expires": null,
-        "id": "vp|XAUUSD|1h|1794798000000",
-        "lots": 0.01,
-        "method": "vp",
-        "name": "📦 VP",
-        "order": "market",
-        "pair": "XAUUSD",
-        "r": 0.13,
-        "signal_time": 1794798000000,
-        "sl": 3901.24,
-        "status": "time",
-        "tf": "1h",
-        "tp": 3819.01,
-        "updated": 1794884406479
-      },
-      {
         "chat": "scalp",
         "close_time": 1794892865688,
         "dir": "BUY",
@@ -423,6 +402,24 @@
         "tf": "15m",
         "tp": 3758.1,
         "updated": 1795041006049
+      },
+      {
+        "chat": "day",
+        "dir": "SELL",
+        "entry": 3718.71,
+        "expires": null,
+        "id": "vp|XAUUSD|1h|1795060800000",
+        "lots": 0.01,
+        "method": "vp",
+        "name": "📦 VP",
+        "order": "market",
+        "pair": "XAUUSD",
+        "signal_time": 1795060800000,
+        "sl": 3748.16,
+        "status": "open",
+        "tf": "1h",
+        "tp": 3659.8,
+        "updated": 1795060806073
       }
     ],
     "v": 1
@@ -1506,15 +1503,15 @@
       "tp": 103.7377539190972
     },
     "XAUUSD|1h": {
-      "_basis": -5.34,
+      "_basis": -3.14,
       "_source": "binance:PAXGUSDT",
       "dir": -1,
-      "entry": 3813.78,
+      "entry": 3718.71,
       "sent": true,
-      "sl": 3836.2404230512398,
-      "status": "tp",
-      "time": 1794963600000,
-      "tp": 3768.859153897521
+      "sl": 3748.1649723949445,
+      "status": "open",
+      "time": 1795060800000,
+      "tp": 3659.8000552101107
     }
   },
   "vp_announced": true,
