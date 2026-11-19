@@ -3,8 +3,11 @@ export const auctionVersion = 'xau-auction-v1'
 export const minutes = 6
 const minute = 60_000
 
-export function auctionUrl(cut) {
-  return 'https://fapi.binance.com/fapi/v1/klines?symbol=XAUUSDT&interval=1m' +
+export function auctionUrl(cut, source = 'XAUUSDT') {
+  const endpoint = source === 'XAUUSDT' ? 'https://fapi.binance.com/fapi/v1/klines?symbol=XAUUSDT' :
+    source === 'PAXGUSDT' ? 'https://data-api.binance.vision/api/v3/klines?symbol=PAXGUSDT' : null
+  if (!endpoint) throw new Error('Unknown gold auction source')
+  return endpoint + '&interval=1m' +
     `&startTime=${cut - minutes * minute}&endTime=${cut - 1}&limit=${minutes}`
 }
 

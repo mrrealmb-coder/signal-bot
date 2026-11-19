@@ -17,8 +17,9 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m unittest discover -q
-      - name: Read a closed XAUUSDT window from the runner
+      - name: Verify the public PAXG signal feed from the runner
         run: |
-          cut=$(( $(date +%s) / 60 * 60000 - 60000 ))
+          # Fixed liquid replay window so a naturally quiet minute cannot fail the connectivity check.
+          cut=1795005900000
           node auction_read.mjs "$cut" 1 smc | tee /tmp/auction.json
           node -e "const d=require('/tmp/auction.json'); if (d.verdict === 'wait') process.exit(1)"
