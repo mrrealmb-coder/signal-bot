@@ -1,4 +1,15 @@
 {
+  "auction_policy": {
+    "methods": [
+      "smc",
+      "vp",
+      "amd",
+      "va80",
+      "dtc"
+    ],
+    "source": "PAXGUSDT",
+    "version": "xau-auction-v1"
+  },
   "chat_ids": [
     "5371043257",
     "-5544664828",
