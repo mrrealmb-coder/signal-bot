@@ -1,10 +1,10 @@
 name: Signal delivery and entry tests
 on:
   push:
-    branches: [main, codex/movement-watch-live, codex/entry-sl-tp]
-    paths: [signal_bot.py, amd_confirmation.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
+    branches: [main, codex/movement-watch-live, codex/entry-sl-tp, codex/order-flow-admission-20261119]
+    paths: [signal_bot.py, auctionAdmission.mjs, auction_read.mjs, auction_admission.py, amd_confirmation.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
   pull_request:
-    paths: [signal_bot.py, amd_confirmation.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
+    paths: [signal_bot.py, auctionAdmission.mjs, auction_read.mjs, auction_admission.py, amd_confirmation.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
 permissions:
   contents: read
 jobs:
@@ -16,4 +16,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m unittest -q test_update.py test_movement_watch.py test_entry_plans.py test_smc_frozen.py test_profile_shadow.py test_amd_confirmation.py test_signal_fixes.py
+      - run: python -m unittest discover -q
+      - name: Read a closed XAUUSDT window from the runner
+        run: |
+          cut=$(( $(date +%s) / 60 * 60000 - 60000 ))
+          node auction_read.mjs "$cut" 1 smc | tee /tmp/auction.json
+          node -e "const d=require('/tmp/auction.json'); if (d.verdict === 'wait') process.exit(1)"

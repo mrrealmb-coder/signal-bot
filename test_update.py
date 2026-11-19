@@ -59,7 +59,7 @@ class UpdateTests(unittest.TestCase):
         now = 1793800000000
         signal = {'time': now - 1000, 'dir': 1, 'status': 'pending', 'entry': 4000, 'sl': 3990, 'tp': 4020}
         before = copy.deepcopy(signal)
-        text = bot.update_text({'watch': [{'pair': 'XAUUSD', 'tf': '15m', 'ema': False}]}, {}, now,
+        text = bot.update_text({'watch': [{'pair': 'XAUUSD', 'tf': '15m', 'ema': False}]}, {'smc': {'XAUUSD|15m': {'sent': True, 'time': signal['time']}}}, now,
                                lambda w, m: ([{'ct': now - 1, 'c': 4001}], signal, 1))
         self.assertIn('Limit хүлээгдэж', text)
         self.assertIn('Entry 4,000.00 · SL 3,990.00 · TP 4,020.00', text)

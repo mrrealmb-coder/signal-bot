@@ -17,6 +17,7 @@ buy-sell.html хуудастай яг ижил дүрмээр ажиллана:
 """
 
 import bisect
+from auction_admission import check_entry
 from smc_frozen import freeze as freeze_smc, select as select_smc
 import json
 import math
@@ -2163,6 +2164,14 @@ def update_text(config, state, now_ms, inspect):
                     out.append("• Шинэ дохио гараагүй — аргын оролтын нөхцөл, чигийн шүүлтүүр бүрдээгүй.")
                     continue
                 status = P.get("status", "open")
+                if pair == 'XAUUSD' and method in ('smc', 'vp', 'amd', 'va80', 'dtc') and status in ('open', 'filled', 'pending'):
+                    bucket = {'amd': 'scalp', 'va80': 'va'}.get(method, method)
+                    prior = state.get(bucket, {}).get(f'{pair}|{tf}', {})
+                    decision = state.get('auction_v1', {}).get(f"{method}|{pair}|{tf}|{P['time']}|{P['dir']}", {})
+                    if not (prior.get('sent') and prior.get('time') == P['time']) and decision.get('verdict') != 'allow':
+                        reason = {'block': 'эсрэг хөдөлгөөн батлагдсан', 'expired': 'хугацаа дууссан'}.get(decision.get('verdict'), 'өгөгдөл хүлээж байна')
+                        out.append(f'• Автомат оролт зөвшөөрөгдөөгүй · order flow · {reason}.')
+                        continue
                 if method in ("vp", "amd", "va80") and P.get("age", 0) > 2 and status == "open":
                     out.append(f"• Өмнөх боломж: {fmt_time(P['time'])}. Шинэ дохио биш; одоо оролт санал болгохгүй.")
                     continue
@@ -2433,6 +2442,9 @@ def main():
         copy = bool(w.get("scalp_copy")) and not ct
         rec = state.setdefault(bucket, {}).get(key)
         S = smc_setup(bars, now_ms, step_ms, kinds, htf, float(w.get("smc_min_risk", 0)), w.get("smc_hours_utc"))
+        if S and w['pair'] == 'XAUUSD' and (not rec or rec.get('time') != S['time']) and S['status'] in ('filled', 'pending'):
+            if S['status'] == 'filled' or not check_entry(state, 'smc', key, S, now_ms):
+                S = None  # continue to track a previously announced frozen order
         S = select_smc(rec, S, bars, now_ms, step_ms)
         if S:
             S["htf_tf"] = htf_tf
@@ -2544,6 +2556,10 @@ def main():
             if not rec and (S["age"] >= VP["fresh_bars"] or now_ms - S["time"] > VP["fresh_bars"] * step_ms):
                 print("  (анх нэмэгдсэн тул хуучин дохиог илгээхгүй, зөвхөн тэмдэглэв)")
             elif st == "open":
+                if not check_entry(state, 'vp', key, S, now_ms):
+                    if prev:
+                        send(prev, prev_kind)
+                    return
                 if prev:
                     send(prev, prev_kind)
                     print(f"  → {label} позиц хаагдлаа")
@@ -2642,6 +2658,8 @@ def main():
             if P["age"] > AMD["fresh_bars"] or P["status"] != "open":
                 print("  (хуучин эсвэл аль хэдийн хаагдсан тул илгээхгүй, зөвхөн тэмдэглэв)")
             else:
+                if not check_entry(state, 'amd', key, P, now_ms):
+                    return
                 closed = [b for b in bars if b["ct"] < now_ms]
                 png = render_chart(closed, step_ms, chart_title(w, "AMD scalp", P["dir"]), P, "amd",
                                    {k: P[k] for k in ("hi", "lo", "ext", "ext_time", "r_start", "r_end")}
@@ -2682,6 +2700,8 @@ def main():
             if P["age"] > VA80["fresh_bars"] or P["status"] != "open":
                 print("  (хуучин эсвэл аль хэдийн хаагдсан тул илгээхгүй, зөвхөн тэмдэглэв)")
             else:
+                if not check_entry(state, 'va80', key, P, now_ms):
+                    return
                 closed = [b for b in qb if b["ct"] < now_ms]
                 ds = (day_key(closed[-1], 900000)) * 86400000 - 2 * 3600000
                 png = render_chart(closed, 900000, chart_title(w, "VA 80%", P["dir"]), P, "vp",
@@ -2719,6 +2739,8 @@ def main():
                 print("  (хуучин дохио тул илгээхгүй, зөвхөн тэмдэглэв)")
                 S["status"] = "skipped"
             elif S["status"] == "open":
+                if not check_entry(state, 'dtc', key, S, now_ms):
+                    return
                 closed = [b for b in bars if b["ct"] < now_ms]
                 png = render_chart(closed, TF[w["tf"]][0] * 1000, chart_title(w, "DTC", S["dir"]), S, "dtc",
                                    {"dec": PAIRS[w["pair"]]["dec"]}, n_before=60)

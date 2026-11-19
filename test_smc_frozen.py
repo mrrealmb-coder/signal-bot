@@ -124,6 +124,7 @@ class FrozenTests(unittest.TestCase):
                 stack.enter_context(patch.dict(bot.os.environ,{'TELEGRAM_TOKEN':'fake'}))
                 stack.enter_context(patch.object(bot,'load_json',side_effect=lambda path,default:config if path==bot.CONFIG_FILE else state if path==bot.STATE_FILE else {}))
                 stack.enter_context(patch.object(bot,'save_state'))
+                stack.enter_context(patch.object(bot,'check_entry',return_value=True))
                 stack.enter_context(patch.object(bot,'FETCH_FILE',str(Path(scratch)/'fetch.json')))
                 stack.enter_context(patch.object(bot.time,'time',return_value=now/1000))
                 stack.enter_context(patch.object(bot,'tg',return_value={'result':[]}))
