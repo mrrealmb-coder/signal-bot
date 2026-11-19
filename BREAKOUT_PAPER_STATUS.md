@@ -1,9 +1,9 @@
 # Independent Breakout paper test
 
 Started (UTC): 2026-11-07T18:15:15.807000+00:00
-Last checked (UTC): 2026-11-19T02:39:11.786000+00:00
+Last checked (UTC): 2026-11-19T11:51:56.163000+00:00
 
-Independently detected paper setups: 29; profile eligible: 8; completed resolved pairs: 4; fetch/validation errors: 0.
+Independently detected paper setups: 31; profile eligible: 9; completed resolved pairs: 4; fetch/validation errors: 0.
 No Telegram messages, no broker orders, no change to original Entry/SL/TP. Prior UTC-day XAUT candle-volume proxy, not broker footprint. Uses raw XAUT prices, NOT spot-adjusted broker prices. No state.json or Telegram acknowledgement dependency. Signals before this independent test initialization excluded.
 
 |Plan|Signal UTC|Profile gate|2R result|Profile result|Reach pip|
@@ -37,6 +37,8 @@ No Telegram messages, no broker orders, no change to original Entry/SL/TP. Prior
 |entry-v1:1794983400000:-1|2026-11-18T06:30:00+00:00|no_level|cancelled|not admitted|0.0 (incomplete)|
 |entry-v1:1795005900000:-1|2026-11-18T12:45:00+00:00|no_level|sl|not admitted|62.8|
 |entry-v1:1795009500000:1|2026-11-18T13:45:00+00:00|eligible|crossed_before_publication|crossed_before_publication|0.0 (incomplete)|
+|entry-v1:1795056300000:-1|2026-11-19T02:45:00+00:00|eligible|crossed_before_publication|crossed_before_publication|0.0 (incomplete)|
+|entry-v1:1795080600000:-1|2026-11-19T09:30:00+00:00|too_close|crossed_before_publication|not admitted|0.0 (incomplete)|
 
 Same completed pairs, $0.60/oz modeled costs:
 - baseline: net -1.53R; mean reach error 192.50 pip.
@@ -45,4 +47,4 @@ Same completed pairs, $0.60/oz modeled costs:
 Ambiguous or data-gap outcomes are retained in breakout_paper_state.json and excluded from resolved-pair totals. Unequal entry availability and no-level/too-close skips are not wins. This is a delayed paper observation of frozen signal-time rules, not proof of live executions.
 
 Modeled activation is signal close +60s; processing is delayed, so this is not a live execution-latency test.
-Skipped downtime windows: 1. Detector watermark: 1795055400000.
+Skipped downtime windows: 1. Detector watermark: 1795088700000.
