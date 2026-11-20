@@ -523,8 +523,10 @@
       },
       {
         "chat": "day",
+        "close_time": 1795212000000,
         "dir": "SELL",
         "entry": 3521.25,
+        "exit": 3542.6,
         "expires": 1795229100000,
         "id": "smc|XAUUSD|15m|1795207500000",
         "lots": 0.01,
@@ -532,12 +534,13 @@
         "name": "🧠 SMC",
         "order": "limit",
         "pair": "XAUUSD",
+        "r": -1.0,
         "signal_time": 1795207500000,
         "sl": 3542.6,
-        "status": "filled",
+        "status": "sl",
         "tf": "15m",
         "tp": 3478.55,
-        "updated": 1795207746449
+        "updated": 1795211885726
       }
     ],
     "v": 1
@@ -1088,6 +1091,19 @@
       "r": -0.3,
       "sl": 3542.6,
       "t": 1795211115080
+    },
+    {
+      "dir": "SELL",
+      "entry": 3521.25,
+      "exit": 3542.6,
+      "how": "SL",
+      "k": "XAUUSD|15m",
+      "m": "smc",
+      "open": 1795207500000,
+      "pips": -213.5,
+      "r": -1.0,
+      "sl": 3542.6,
+      "t": 1795211891461
     }
   ],
   "ledger": [
@@ -1450,6 +1466,12 @@
       "m": "smc_d",
       "r": -0.3,
       "t": 1795211115080
+    },
+    {
+      "k": "XAUUSD|15m",
+      "m": "smc",
+      "r": -1.0,
+      "t": 1795211891461
     }
   ],
   "ledger_start": 1793195530901,
@@ -1554,7 +1576,7 @@
         "_basis": -4.34,
         "_frozen_version": 1,
         "_source": "binance:XAUTUSDT",
-        "close_time": null,
+        "close_time": 1795212000000,
         "ct": false,
         "dir": -1,
         "entry": 3521.25,
@@ -1573,13 +1595,13 @@
         "ob_time": 1795202100000,
         "sl": 3542.6,
         "sma": true,
-        "status": "filled",
+        "status": "sl",
         "test": false,
         "time": 1795207500000,
         "tp": 3478.55
       },
       "sent": true,
-      "status": "filled",
+      "status": "sl",
       "time": 1795207500000
     },
     "XAUUSD|1h": {
