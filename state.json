@@ -504,10 +504,10 @@
         "pair": "XAUUSD",
         "signal_time": 1795118400000,
         "sl": 3692.05,
-        "status": "pending",
+        "status": "expired",
         "tf": "15m",
         "tp": 3662.43,
-        "updated": 1795118406061
+        "updated": 1795140006516
       }
     ],
     "v": 1
@@ -1524,13 +1524,13 @@
         "ob_time": 1795110300000,
         "sl": 3692.05,
         "sma": true,
-        "status": "pending",
+        "status": "expired",
         "test": false,
         "time": 1795118400000,
         "tp": 3662.43
       },
       "sent": true,
-      "status": "pending",
+      "status": "expired",
       "time": 1795118400000
     },
     "XAUUSD|1h": {
