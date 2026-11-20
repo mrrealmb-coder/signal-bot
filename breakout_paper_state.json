@@ -1,11 +1,11 @@
 {
   "version": "independent-breakout-paper-v1",
   "started_at": 1794075315807,
-  "last_run": 1795141445934,
-  "watermark": 1795140900000,
+  "last_run": 1795175580422,
+  "watermark": 1795175100000,
   "last_by_direction": {
     "-1": 1795138200000,
-    "1": 1795009500000
+    "1": 1795171500000
   },
   "records": {
     "entry-v1:1794183300000:1": {
@@ -2445,19 +2445,101 @@
         "lots": 0.01,
         "basis": 0,
         "source": "binance:XAUTUSDT",
-        "status": "filled",
-        "last_ct": 1795141439999,
+        "status": "time_exit",
+        "last_ct": 1795160399999,
         "fill": 3569.71,
         "filled_at": 1795138800000,
         "filled_bar": 1795138859999,
         "hold_until": 1795160400000,
-        "favorable_pips_upper": 412.6000000000022,
-        "adverse_pips_upper": 44.49999999999818
+        "favorable_pips_upper": 554.2999999999984,
+        "adverse_pips_upper": 44.49999999999818,
+        "ended_at": 1795160400000,
+        "exit": 3542.76,
+        "gross_pips": 269.4999999999982,
+        "gross_r": 1.3295510606808012
       },
-      "reach": 41.26000000000022,
+      "reach": 55.429999999999836,
       "measurement": "conservative pre-original-SL favorable reach; not exact reversal",
       "origin": "independent_paper",
-      "complete": false
+      "complete": true,
+      "reach_complete": true,
+      "baseline_error_pips": 148.89999999999873,
+      "large_move": true
+    },
+    "entry-v1:1795171500000:1": {
+      "id": "entry-v1:1795171500000:1",
+      "enrolled_at": 1795175580422,
+      "signal_time": 1795171500000,
+      "basis": 0,
+      "profile_status": "eligible",
+      "profile_levels": [
+        3589,
+        3666.5,
+        3710
+      ],
+      "profile_level": 3666.5,
+      "profile_distance": 71.88706629724328,
+      "baseline": {
+        "id": "entry-v1:1795171500000:1",
+        "direction": 1,
+        "kind": "BOS",
+        "signal_time": 1795171500000,
+        "publish_at": 1795171560000,
+        "expires": 1795175100000,
+        "entry": 3592.66,
+        "sl": 3584.49,
+        "tp": 3609.0,
+        "risk": 8.170000000000073,
+        "atr": 13.019558018379088,
+        "lots": 0.03,
+        "basis": 0,
+        "source": "binance:XAUTUSDT",
+        "status": "cancelled",
+        "last_ct": 1795171919999,
+        "ended_at": 1795171920000
+      },
+      "profile": {
+        "id": "entry-v1:1795171500000:1",
+        "direction": 1,
+        "kind": "BOS",
+        "signal_time": 1795171500000,
+        "publish_at": 1795171560000,
+        "expires": 1795175100000,
+        "entry": 3592.66,
+        "sl": 3584.49,
+        "tp": 3664.547066297243,
+        "risk": 8.170000000000073,
+        "atr": 13.019558018379088,
+        "lots": 0.03,
+        "basis": 0,
+        "source": "binance:XAUTUSDT",
+        "status": "cancelled",
+        "last_ct": 1795171919999,
+        "ended_at": 1795171920000
+      },
+      "observer": {
+        "id": "entry-v1:1795171500000:1",
+        "direction": 1,
+        "kind": "BOS",
+        "signal_time": 1795171500000,
+        "publish_at": 1795171560000,
+        "expires": 1795175100000,
+        "entry": 3592.66,
+        "sl": 3584.49,
+        "tp": 1000000000000.0,
+        "risk": 8.170000000000073,
+        "atr": 13.019558018379088,
+        "lots": 0.03,
+        "basis": 0,
+        "source": "binance:XAUTUSDT",
+        "status": "cancelled",
+        "last_ct": 1795171919999,
+        "ended_at": 1795171920000
+      },
+      "reach": 0.0,
+      "measurement": "conservative pre-original-SL favorable reach; not exact reversal",
+      "origin": "independent_paper",
+      "complete": true
     }
   },
   "errors": {},
@@ -2502,7 +2584,8 @@
     "1795080600000": "paper_setup",
     "1795089600000": "paper_setup",
     "1795118400000": "paper_setup",
-    "1795138200000": "paper_setup"
+    "1795138200000": "paper_setup",
+    "1795171500000": "paper_setup"
   },
   "source_mode": "independent raw XAUTUSDT",
   "skipped": [
