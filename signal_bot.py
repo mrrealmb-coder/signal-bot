@@ -81,7 +81,10 @@ def smc_hours_ok(t_ms, hours):
 #   3) Зөвхөн 200 өдрийн SMA-ийн чигийн дагуу (үнэ SMA-аас дээр бол зөвхөн BUY, доор бол зөвхөн SELL)
 #   4) SL = 1.5 ATR(14), TP = 2R, 24 лааны дотор хүрэхгүй бол хаана. Өдөрт ганц (эхний) дохио.
 # Эзэлхүүнийг PAXGUSDT-аас авна: туршилтаар XAUT-ийн эзэлхүүн ажиллаагүй, PAXG-ийнх ажилласан.
-VP = {"sym": "PAXGUSDT", "step": 1.0, "va": 0.70, "need": 2, "sl_atr": 1.5, "tp_r": 2.0, "hold": 24,
+# Алтны VP-ийн TP (чигийн дагуух дохио): 3R. 2023-10 – 2026-11-д IC MT5 XAUUSD ба PAXG дээр 2R-аас
+# 2023-24, 2025-26.4, 2026-05…11 гурван хэсэгт гурвууландаа дээр гарсан (BOSFib docs/research/gold-vp-tuning-20261121).
+# Бусад хос ба чигийн эсрэг VP нь "tp_r" (2R) хэвээр.
+VP = {"sym": "PAXGUSDT", "step": 1.0, "va": 0.70, "need": 2, "sl_atr": 1.5, "tp_r": 2.0, "tp_r_gold": 3.0, "hold": 24,
       "sma": 200, "fresh_bars": 2}
 
 # Supertrend (10, 3) + 200 өдрийн чиг. NASDAQ 100-ийн 5 минутын 3 жилийн туршилтаар хамгийн тогтвортой гарсан
@@ -809,9 +812,10 @@ def sma_trend_fn(daily):
     return f
 
 
-def vp_signal(bars, daily, now_ms, step_ms, side=1, step=None):
+def vp_signal(bars, daily, now_ms, step_ms, side=1, step=None, tp_r=None):
     """Сүүлийн 2 арилжааны өдрийн VP дохионоос хамгийн сүүлийнхийг буцаана (өдөрт зөвхөн эхний эвдрэл).
     side=1: 200 өдрийн чигийн дагуух, side=-1: чигийн эсрэг дохио."""
+    tp_r = VP["tp_r"] if tp_r is None else tp_r
     closed = [b for b in bars if b["ct"] < now_ms]
     a = atr(closed, RULES["atr"])
     trend = sma_trend_fn(daily)
@@ -840,7 +844,7 @@ def vp_signal(bars, daily, now_ms, step_ms, side=1, step=None):
                 tr = trend(t)
                 if tr == d * side:
                     risk = VP["sl_atr"] * a[i]
-                    found = {"dir": d, "time": t, "entry": c, "sl": c - d * risk, "tp": c + d * VP["tp_r"] * risk,
+                    found = {"dir": d, "time": t, "entry": c, "sl": c - d * risk, "tp": c + d * tp_r * risk,
                              "va": va, "age": len(closed) - 1 - i}
                 elif side == 1:
                     print(f"  VP: {'BUY' if d == 1 else 'SELL'} эвдрэл {fmt_time(t)} — 200 өдрийн чигийн эсрэг тул алгасав")
@@ -1667,7 +1671,7 @@ def vp_message(pair_key, tf, S, price, prev=None, ct=False):
         "",
         f"Оролт (Market): {fmt_p(S['entry'], dec)}",
         f"SL: {fmt_p(S['sl'], dec)}  ({'−' if d == 1 else '+'}{fmt_p(risk, dec)})",
-        f"TP: {fmt_p(S['tp'], dec)}  ({'+' if d == 1 else '−'}{fmt_p(risk * VP['tp_r'], dec)})",
+        f"TP: {fmt_p(S['tp'], dec)}  ({'+' if d == 1 else '−'}{fmt_p(abs(S['tp'] - S['entry']), dec)})",
         f"Хугацаа: {VP['hold']} цагт TP/SL-д хүрэхгүй бол {fmt_time(S['time'] + VP['hold'] * 3600000)}-д хаана.",
         f"Одоогийн үнэ: {fmt_p(price, dec)}",
     ]
@@ -1686,7 +1690,8 @@ def vp_close_text(pair_key, tf, rec, status, t_ms, price):
     dec = PAIRS[pair_key]["dec"]
     h = head(pair_key, tf, rec["dir"])
     if status == "tp":
-        return f"📦 🎯 VP TP хүрсэн · {h}\nTP {fmt_p(price, dec)} ({fmt_time(t_ms)[-5:]}). Ашиг ≈ +{VP['tp_r']:g}R"
+        tp_r = abs(rec["tp"] - rec["entry"]) / abs(rec["entry"] - rec["sl"])
+        return f"📦 🎯 VP TP хүрсэн · {h}\nTP {fmt_p(price, dec)} ({fmt_time(t_ms)[-5:]}). Ашиг ≈ +{round(tp_r, 1):g}R"
     if status == "sl":
         return f"📦 🛑 VP SL цохисон · {h}\nSL {fmt_p(price, dec)} ({fmt_time(t_ms)[-5:]}). Алдагдал ≈ −1R"
     r = (price - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
@@ -2553,7 +2558,8 @@ def main():
                     if not ct:
                         day_result(bucket, key, rec["time"], r, px, st)
                 rec["status"] = st
-        S = stamp_basis(vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1, step=vstep), pbars)
+        S = stamp_basis(vp_signal(pbars, daily, now_ms, step_ms, side=-1 if ct else 1, step=vstep,
+                                     tp_r=VP["tp_r_gold"] if gold and not ct else None), pbars)
         trend = sma_trend_fn(daily)(now_ms)
         print(f"{key}: {label} {'BUY' if S and S['dir'] == 1 else 'SELL' if S else 'дохио алга'}"
               f"{' ' + fmt_time(S['time']) if S else ''} · 200 өдрийн чиг {'↑' if trend == 1 else '↓' if trend == -1 else '?'}")
