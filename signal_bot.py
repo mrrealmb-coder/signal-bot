@@ -17,7 +17,7 @@ buy-sell.html хуудастай яг ижил дүрмээр ажиллана:
 """
 
 import bisect
-from auction_admission import check_entry
+from auction_admission import check_entry, GATES_ENTRY
 from smc_frozen import freeze as freeze_smc, select as select_smc
 import json
 import math
@@ -111,7 +111,9 @@ DAY = {"open_srv": 1.05, "last_entry_srv": 23.0, "close_srv": 23.75}
 #   Өдөрт ганц (эхний) боломж. 6 цагт эсвэл IC-ийн өдрийн хаалтад (аль түрүүлэх) хүрэхгүй бол хаана.
 # Шинэ хувилбар: sweep/reclaim дараа 3 хаагдсан M5 лаанд чиглэлийн баталгаа хүлээнэ.
 # Баталгааны close шинэ Entry; анхны SL, хугацаа хэвээр; TP зай дээд тал нь $6.
-AMD = {"rng": (2, 7), "man": (7, 11), "sl_buf_atr": 0.1, "max_r_atr": 6.0, "min_tp_r": 0.5, "tp_cap_r": 2.0,
+# Алтны AMD нь Telegram-д илгээхгүй, зөвхөн shadow бүртгэлд (2026-11-21): IC MT5-ийн 38 сарын replay-д
+# зардлын дараа −5R…−50R, жил бүр сөрөг; 39 зах зээлийн 38-д сөрөг. Буцааж асаахад "telegram": True.
+AMD = {"telegram": False, "rng": (2, 7), "man": (7, 11), "sl_buf_atr": 0.1, "max_r_atr": 6.0, "min_tp_r": 0.5, "tp_cap_r": 2.0,
        "hold": 72, "fresh_bars": 2}
 
 
@@ -1871,7 +1873,7 @@ METHOD_NAMES = {"ema": "📊 EMA", "smc": "🧠 SMC", "vp": "📦 VP", "st": "�
                 "smc_ct": "⚠️ SMC эсрэг", "vp_ct": "⚠️ VP эсрэг", "st_ct": "⚠️ Supertrend эсрэг",
                 "dtc_ct": "⚠️ DTC эсрэг", "st_t": "🧪 Supertrend", "smc_t": "🧪 SMC",
                 "smc_d": "📅 SMC day", "vp_d": "📅 VP day", "st_d": "📅 Supertrend day", "amd_s": "⚡ AMD scalp",
-                "smc_s": "🧪 SMC scalp", "va_t": "🧪 VA 80%"}
+                "smc_s": "🧪 SMC scalp", "va_t": "🧪 VA 80%", "amd_t": "🧪 AMD shadow"}
 # "_t" төгсгөлтэй арга = 🧪 туршилтын хослол (config-д "test": true), "_s" = ⚡ Scalp. Тайланд тусад нь тоолно.
 
 
@@ -2173,10 +2175,13 @@ def update_text(config, state, now_ms, inspect):
                     bucket = {'amd': 'scalp', 'va80': 'va'}.get(method, method)
                     prior = state.get(bucket, {}).get(f'{pair}|{tf}', {})
                     decision = state.get('auction_v1', {}).get(f"{method}|{pair}|{tf}|{P['time']}|{P['dir']}", {})
-                    if not (prior.get('sent') and prior.get('time') == P['time']) and decision.get('verdict') != 'allow':
+                    if GATES_ENTRY and not (prior.get('sent') and prior.get('time') == P['time']) and decision.get('verdict') != 'allow':
                         reason = {'block': 'эсрэг хөдөлгөөн батлагдсан', 'expired': 'хугацаа дууссан'}.get(decision.get('verdict'), 'өгөгдөл хүлээж байна')
                         out.append(f'• Автомат оролт зөвшөөрөгдөөгүй · order flow · {reason}.')
                         continue
+                if method == "amd" and pair == "XAUUSD" and not AMD.get("telegram", True):
+                    out.append("• 🧪 Shadow: алтны AMD-ийг арилжаанд санал болгохгүй, зөвхөн бүртгэнэ.")
+                    continue
                 if method in ("vp", "amd", "va80") and P.get("age", 0) > 2 and status == "open":
                     out.append(f"• Өмнөх боломж: {fmt_time(P['time'])}. Шинэ дохио биш; одоо оролт санал болгохгүй.")
                     continue
@@ -2357,10 +2362,11 @@ def main():
 
     def flow_line(method, key, signal):
         row = state.get('auction_v1', {}).get(f"{method}|{key}|{signal['time']}|{signal['dir']}", {})
-        if row.get('verdict') != 'allow':
+        labels = {'neutral': 'саармаг', 'acceptance': 'түвшний гадна тогтсон', 'reclaim': 'түвшнээ буцааж авсан'}
+        if row.get('verdict') not in ('allow', 'block') or row.get('pattern') not in labels:
             return ''
-        label = {'neutral': 'саармаг', 'acceptance': 'түвшний гадна тогтсон', 'reclaim': 'түвшнээ буцааж авсан'}[row['pattern']]
-        return f'\nАвтомат order flow · PAXGUSDT · {label}'
+        label = labels[row['pattern']] + (' · эсрэг' if row['verdict'] == 'block' else '')
+        return f'\nOrder flow (бүртгэл, оролтыг шүүхгүй) · PAXGUSDT · {label}'
 
     def chart_title(w, method, d):
         return f"{PAIRS[w['pair']]['name']} · {TF[w['tf']][4]} · {method} {'BUY' if d == 1 else 'SELL'}"
@@ -2657,6 +2663,8 @@ def main():
             out = amd_outcome(bars, rec, now_ms)
             if out:
                 r = (out["exit"] - rec["entry"]) * rec["dir"] / abs(rec["entry"] - rec["sl"])
+                if rec.get("shadow"):
+                    record(state, "amd_t", key, r, rec, out["exit"], out["status"])
                 if rec.get("sent"):
                     send(amd_close_text(w["pair"], w["tf"], rec, out, r), "scalp")
                     record(state, "amd_s", key, r, rec, out["exit"], out["status"])
@@ -2674,6 +2682,11 @@ def main():
             else:
                 if not check_entry(state, 'amd', key, P, now_ms):
                     return
+                if not AMD.get("telegram", True):
+                    P["shadow"] = True
+                    print("  → AMD scalp shadow: Telegram-д илгээгээгүй, бүртгэлд үлдээв")
+                    scal[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "limit_time", "status", "sent", "shadow", "confirmation_version", "setup_time", "_source", "_basis")}
+                    return
                 closed = [b for b in bars if b["ct"] < now_ms]
                 png = render_chart(closed, step_ms, chart_title(w, "AMD scalp", P["dir"]), P, "amd",
                                    {k: P[k] for k in ("hi", "lo", "ext", "ext_time", "r_start", "r_end")}
@@ -2682,7 +2695,7 @@ def main():
                 P["sent"] = True
                 feed_put(state, "amd", key, P, "open", "market", "scalp", now_ms)
                 print("  → AMD scalp дохио илгээлээ")
-            scal[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "limit_time", "status", "sent", "confirmation_version", "setup_time", "_source", "_basis")}
+            scal[key] = {k: P.get(k) for k in ("time", "dir", "entry", "sl", "tp", "limit_time", "status", "sent", "shadow", "confirmation_version", "setup_time", "_source", "_basis")}
 
     def track_va80(key, w, now_ms):
         """🧪 VA 80%: PAXG 1 цаг (VA) + PAXG 15 минут (дохио), зах зээлийн цагаар шүүнэ. ⚡ Scalp чатад илгээнэ."""
@@ -2984,7 +2997,8 @@ def main():
                     if P and P.get("status") == "open":
                         P = dict(P)
                     else:
-                        P = vp_signal(bars, get_daily_for(pair), now_ms, step, step=PAIRS[pair].get("vp_step"))
+                        P = vp_signal(bars, get_daily_for(pair), now_ms, step, step=PAIRS[pair].get("vp_step"),
+                                      tp_r=VP["tp_r_gold"] if pair == "XAUUSD" else None)
                     if P:
                         P = dict(P)
                         P["status"] = vp_outcome(rebase(bars, P), P, now_ms)[0]

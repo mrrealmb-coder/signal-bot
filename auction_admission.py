@@ -14,7 +14,13 @@ def read_flow(cut, direction, method):
         return {'verdict': 'wait', 'pattern': 'data', 'cut': cut, 'error': 'reader'}
 
 
-def check_entry(state, method, key, signal, now, reader=read_flow):
+# The reading is recorded for every gold entry but does not withhold it (operator, 2026-11-21): on the
+# record so far it changed 0R on the bot and BOSFib closes, and it delayed market entries waiting for
+# Binance. Set True to let a non-allow verdict withhold the entry again.
+GATES_ENTRY = False
+
+
+def check_entry(state, method, key, signal, now, reader=read_flow, gates=None):
     if key.split('|')[0] != 'XAUUSD':
         return True
     cut = signal['time']
@@ -32,4 +38,6 @@ def check_entry(state, method, key, signal, now, reader=read_flow):
         if len(book) > 240:
             oldest = min(book, key=lambda name: book[name]['cut'])
             del book[oldest]
+    if not (GATES_ENTRY if gates is None else gates):
+        return True
     return decision['verdict'] == 'allow'
