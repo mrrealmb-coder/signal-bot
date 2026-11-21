@@ -1,10 +1,10 @@
 {
   "version": "independent-breakout-paper-v1",
   "started_at": 1794075315807,
-  "last_run": 1795206627865,
-  "watermark": 1795206600000,
+  "last_run": 1795228065338,
+  "watermark": 1795227300000,
   "last_by_direction": {
-    "-1": 1795188600000,
+    "-1": 1795207500000,
     "1": 1795171500000
   },
   "records": {
@@ -2701,7 +2701,8 @@
     "1795138200000": "paper_setup",
     "1795171500000": "paper_setup",
     "1795181400000": "paper_setup",
-    "1795188600000": "paper_setup"
+    "1795188600000": "paper_setup",
+    "1795207500000": "risk_distance"
   },
   "source_mode": "independent raw XAUTUSDT",
   "skipped": [
