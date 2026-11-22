@@ -120,22 +120,6 @@
       "status": "done",
       "tf": "15m",
       "time": 1795207500000
-    },
-    "vp|XAUUSD|1h": {
-      "_basis": -3.14,
-      "_source": "binance:PAXGUSDT",
-      "copy": false,
-      "cut": 1795124700000,
-      "dir": -1,
-      "entry": 3718.71,
-      "kind": "day",
-      "led": "vp_d",
-      "pair": "XAUUSD",
-      "px": "PAXGUSDT",
-      "sl": 3748.1649723949445,
-      "status": "done",
-      "tf": "1h",
-      "time": 1795060800000
     }
   },
   "day_announced": true,
