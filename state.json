@@ -117,24 +117,7 @@
     "5371043257": "off"
   },
   "ct_announced": true,
-  "day": {
-    "smc|XAUUSD|15m": {
-      "_basis": -4.34,
-      "_source": "binance:XAUTUSDT",
-      "copy": true,
-      "cut": 1795211100000,
-      "dir": -1,
-      "entry": 3521.25,
-      "kind": "day",
-      "led": "smc_d",
-      "pair": "XAUUSD",
-      "px": null,
-      "sl": 3542.6,
-      "status": "done",
-      "tf": "15m",
-      "time": 1795207500000
-    }
-  },
+  "day": {},
   "day_announced": true,
   "dtc": {
     "XAUUSD|15m": {
