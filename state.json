@@ -101,6 +101,19 @@
       "tp": 3522.0,
       "verdict": "allow",
       "version": "xau-auction-v1"
+    },
+    "vp|XAUUSD|1h|1795539600000|-1": {
+      "cut": 1795539600000,
+      "entry": 3564.25,
+      "high": 3563.63,
+      "low": 3559.33,
+      "pattern": "neutral",
+      "side": 0,
+      "sl": 3595.9994639045444,
+      "source": "PAXGUSDT",
+      "tp": 3469.0016082863667,
+      "verdict": "allow",
+      "version": "xau-auction-v1"
     }
   },
   "chat_ids": [
@@ -117,7 +130,24 @@
     "5371043257": "off"
   },
   "ct_announced": true,
-  "day": {},
+  "day": {
+    "vp|XAUUSD|1h": {
+      "_basis": -4.53,
+      "_source": "binance:PAXGUSDT",
+      "copy": false,
+      "cut": 1795556700000,
+      "dir": -1,
+      "entry": 3564.25,
+      "kind": "day",
+      "led": "vp_d",
+      "pair": "XAUUSD",
+      "px": "PAXGUSDT",
+      "sl": 3595.9994639045444,
+      "status": "open",
+      "tf": "1h",
+      "time": 1795539600000
+    }
+  },
   "day_announced": true,
   "dtc": {
     "XAUUSD|15m": {
@@ -443,6 +473,24 @@
         "tf": "15m",
         "tp": 3522.0,
         "updated": 1795395966319
+      },
+      {
+        "chat": "day",
+        "dir": "SELL",
+        "entry": 3564.25,
+        "expires": null,
+        "id": "vp|XAUUSD|1h|1795539600000",
+        "lots": 0.01,
+        "method": "vp",
+        "name": "📦 VP",
+        "order": "market",
+        "pair": "XAUUSD",
+        "signal_time": 1795539600000,
+        "sl": 3596.0,
+        "status": "open",
+        "tf": "1h",
+        "tp": 3469.0,
+        "updated": 1795539605826
       }
     ],
     "v": 1
@@ -1656,15 +1704,15 @@
       "tp": 103.7377539190972
     },
     "XAUUSD|1h": {
-      "_basis": -3.14,
+      "_basis": -4.53,
       "_source": "binance:PAXGUSDT",
       "dir": -1,
-      "entry": 3718.71,
+      "entry": 3564.25,
       "sent": true,
-      "sl": 3748.1649723949445,
-      "status": "tp",
-      "time": 1795060800000,
-      "tp": 3659.8000552101107
+      "sl": 3595.9994639045444,
+      "status": "open",
+      "time": 1795539600000,
+      "tp": 3469.0016082863667
     }
   },
   "vp_announced": true,
