@@ -1,9 +1,9 @@
 # Independent Breakout paper test
 
 Started (UTC): 2026-11-07T18:15:15.807000+00:00
-Last checked (UTC): 2026-11-24T02:19:09.776000+00:00
+Last checked (UTC): 2026-11-24T13:56:14.228000+00:00
 
-Independently detected paper setups: 38; profile eligible: 11; completed resolved pairs: 5; fetch/validation errors: 0.
+Independently detected paper setups: 41; profile eligible: 13; completed resolved pairs: 6; fetch/validation errors: 0.
 No Telegram messages, no broker orders, no change to original Entry/SL/TP. Prior UTC-day XAUT candle-volume proxy, not broker footprint. Uses raw XAUT prices, NOT spot-adjusted broker prices. No state.json or Telegram acknowledgement dependency. Signals before this independent test initialization excluded.
 
 |Plan|Signal UTC|Profile gate|2R result|Profile result|Reach pip|
@@ -46,12 +46,15 @@ No Telegram messages, no broker orders, no change to original Entry/SL/TP. Prior
 |entry-v1:1795181400000:-1|2026-11-20T13:30:00+00:00|no_level|cancelled|not admitted|0.0 (incomplete)|
 |entry-v1:1795188600000:-1|2026-11-20T15:30:00+00:00|no_level|cancelled|not admitted|0.0 (incomplete)|
 |entry-v1:1795477500000:-1|2026-11-23T23:45:00+00:00|eligible|sl|sl|65.5|
+|entry-v1:1795501800000:-1|2026-11-24T06:30:00+00:00|eligible|sl|sl|26.2|
+|entry-v1:1795509000000:-1|2026-11-24T08:30:00+00:00|too_close|cancelled|not admitted|0.0 (incomplete)|
+|entry-v1:1795527900000:-1|2026-11-24T13:45:00+00:00|eligible|crossed_before_publication|crossed_before_publication|0.0 (incomplete)|
 
 Same completed pairs, $0.60/oz modeled costs:
-- baseline: net -2.66R; mean reach error 159.34 pip.
-- profile: net +5.35R; mean reach error 278.28 pip.
+- baseline: net -3.72R; mean reach error 158.35 pip.
+- profile: net +4.28R; mean reach error 257.71 pip.
 
 Ambiguous or data-gap outcomes are retained in breakout_paper_state.json and excluded from resolved-pair totals. Unequal entry availability and no-level/too-close skips are not wins. This is a delayed paper observation of frozen signal-time rules, not proof of live executions.
 
 Modeled activation is signal close +60s; processing is delayed, so this is not a live execution-latency test.
-Skipped downtime windows: 1. Detector watermark: 1795486500000.
+Skipped downtime windows: 1. Detector watermark: 1795527900000.
