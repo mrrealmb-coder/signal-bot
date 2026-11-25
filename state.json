@@ -483,27 +483,6 @@
         "updated": 1795196706020
       },
       {
-        "chat": "scalp",
-        "close_time": 1795395966319,
-        "dir": "SELL",
-        "entry": 3575.02,
-        "exit": 3589.24,
-        "expires": null,
-        "id": "va|XAUUSD|15m|1795393800000",
-        "lots": 0.02,
-        "method": "va",
-        "name": "🧪 VA 80%",
-        "order": "market",
-        "pair": "XAUUSD",
-        "r": -1.0,
-        "signal_time": 1795393800000,
-        "sl": 3589.24,
-        "status": "sl",
-        "tf": "15m",
-        "tp": 3522.0,
-        "updated": 1795395966319
-      },
-      {
         "chat": "day",
         "dir": "SELL",
         "entry": 3564.25,
@@ -523,8 +502,10 @@
       },
       {
         "chat": "day",
+        "close_time": 1795570200000,
         "dir": "SELL",
         "entry": 3562.57,
+        "exit": 3535.76,
         "expires": 1795567500000,
         "id": "smc|XAUUSD|15m|1795545900000",
         "lots": 0.02,
@@ -532,12 +513,13 @@
         "name": "🧠 SMC",
         "order": "limit",
         "pair": "XAUUSD",
+        "r": 2.0,
         "signal_time": 1795545900000,
         "sl": 3575.97,
-        "status": "filled",
+        "status": "tp",
         "tf": "15m",
         "tp": 3535.76,
-        "updated": 1795547826282
+        "updated": 1795569426120
       }
     ],
     "v": 1
@@ -1140,6 +1122,19 @@
       "r": 0.34,
       "sl": 3596.0,
       "t": 1795556715416
+    },
+    {
+      "dir": "SELL",
+      "entry": 3562.57,
+      "exit": 3535.76,
+      "how": "TP",
+      "k": "XAUUSD|15m",
+      "m": "smc",
+      "open": 1795545900000,
+      "pips": 268.1,
+      "r": 2.0,
+      "sl": 3575.97,
+      "t": 1795569431766
     }
   ],
   "ledger": [
@@ -1526,6 +1521,12 @@
       "m": "vp_d",
       "r": 0.34,
       "t": 1795556715416
+    },
+    {
+      "k": "XAUUSD|15m",
+      "m": "smc",
+      "r": 2.0,
+      "t": 1795569431766
     }
   ],
   "ledger_start": 1793195530901,
@@ -1630,7 +1631,7 @@
         "_basis": -6.04,
         "_frozen_version": 1,
         "_source": "binance:XAUTUSDT",
-        "close_time": null,
+        "close_time": 1795570200000,
         "ct": false,
         "dir": -1,
         "entry": 3562.57,
@@ -1649,13 +1650,13 @@
         "ob_time": 1795540500000,
         "sl": 3575.97,
         "sma": true,
-        "status": "filled",
+        "status": "tp",
         "test": false,
         "time": 1795545900000,
         "tp": 3535.76
       },
       "sent": true,
-      "status": "filled",
+      "status": "tp",
       "time": 1795545900000
     },
     "XAUUSD|1h": {
