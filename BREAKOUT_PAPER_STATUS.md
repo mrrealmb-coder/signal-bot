@@ -1,9 +1,9 @@
 # Independent Breakout paper test
 
 Started (UTC): 2026-11-07T18:15:15.807000+00:00
-Last checked (UTC): 2026-11-24T23:31:15.289000+00:00
+Last checked (UTC): 2026-11-25T08:49:41.537000+00:00
 
-Independently detected paper setups: 44; profile eligible: 13; completed resolved pairs: 6; fetch/validation errors: 0.
+Independently detected paper setups: 46; profile eligible: 13; completed resolved pairs: 6; fetch/validation errors: 0.
 No Telegram messages, no broker orders, no change to original Entry/SL/TP. Prior UTC-day XAUT candle-volume proxy, not broker footprint. Uses raw XAUT prices, NOT spot-adjusted broker prices. No state.json or Telegram acknowledgement dependency. Signals before this independent test initialization excluded.
 
 |Plan|Signal UTC|Profile gate|2R result|Profile result|Reach pip|
@@ -52,6 +52,8 @@ No Telegram messages, no broker orders, no change to original Entry/SL/TP. Prior
 |entry-v1:1795533300000:-1|2026-11-24T15:15:00+00:00|too_close|crossed_before_publication|not admitted|0.0 (incomplete)|
 |entry-v1:1795545900000:-1|2026-11-24T18:45:00+00:00|no_level|crossed_before_publication|not admitted|0.0 (incomplete)|
 |entry-v1:1795552200000:-1|2026-11-24T20:30:00+00:00|no_level|sl|not admitted|21.8|
+|entry-v1:1795566600000:-1|2026-11-25T00:30:00+00:00|no_level|cancelled|not admitted|0.0 (incomplete)|
+|entry-v1:1795584600000:-1|2026-11-25T05:30:00+00:00|no_level|crossed_before_publication|not admitted|0.0 (incomplete)|
 
 Same completed pairs, $0.60/oz modeled costs:
 - baseline: net -3.72R; mean reach error 158.35 pip.
@@ -60,4 +62,4 @@ Same completed pairs, $0.60/oz modeled costs:
 Ambiguous or data-gap outcomes are retained in breakout_paper_state.json and excluded from resolved-pair totals. Unequal entry availability and no-level/too-close skips are not wins. This is a delayed paper observation of frozen signal-time rules, not proof of live executions.
 
 Modeled activation is signal close +60s; processing is delayed, so this is not a live execution-latency test.
-Skipped downtime windows: 1. Detector watermark: 1795563000000.
+Skipped downtime windows: 1. Detector watermark: 1795596300000.
