@@ -206,15 +206,15 @@
   "day_announced": true,
   "dtc": {
     "XAUUSD|15m": {
-      "_basis": -2.02,
+      "_basis": -2.69,
       "_source": "binance:XAUTUSDT",
       "dir": -1,
-      "entry": 3844.78,
+      "entry": 3847.63,
       "sent": null,
-      "sl": 3861.63,
+      "sl": 3862.76,
       "status": "skipped",
-      "time": 1794942000000,
-      "tp": 3811.0800000000004
+      "time": 1794941100000,
+      "tp": 3817.37
     }
   },
   "dtc_announced": true,
@@ -1809,7 +1809,7 @@
   },
   "smc_m10_shadow": {
     "active": null,
-    "checked_close": 1795699200000,
+    "checked_close": 1795699800000,
     "last_setup": null,
     "records": [],
     "started_at": 1795695372597,
