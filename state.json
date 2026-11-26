@@ -11,6 +11,19 @@
     "version": "xau-auction-v1"
   },
   "auction_v1": {
+    "amd|XAUUSD|5m|1795706400000|-1": {
+      "cut": 1795706400000,
+      "entry": 3575.05,
+      "high": 3569.25,
+      "low": 3566.63,
+      "pattern": "neutral",
+      "side": 0,
+      "sl": 3586.0670939413876,
+      "source": "PAXGUSDT",
+      "tp": 3569.05,
+      "verdict": "allow",
+      "version": "xau-auction-v1"
+    },
     "smc|XAUUSD|15m|1795089600000|-1": {
       "cut": 1795089600000,
       "entry": 3734.07,
@@ -1710,18 +1723,19 @@
   "report_week": "2026-W48",
   "scalp": {
     "XAUUSD|5m": {
-      "_basis": -13.61,
+      "_basis": -2.76,
       "_source": "binance:XAUTUSDT",
       "confirmation_version": 1,
       "dir": -1,
-      "entry": 3874.2000000000003,
-      "limit_time": 1794863400000,
-      "sent": true,
-      "setup_time": 1794841800000,
-      "sl": 3889.2368424334386,
-      "status": "tp",
-      "time": 1794842100000,
-      "tp": 3868.2000000000003
+      "entry": 3575.05,
+      "limit_time": 1795727700000,
+      "sent": false,
+      "setup_time": 1795706100000,
+      "shadow": true,
+      "sl": 3586.0670939413876,
+      "status": "open",
+      "time": 1795706400000,
+      "tp": 3569.05
     }
   },
   "smc": {
@@ -1809,7 +1823,7 @@
   },
   "smc_m10_shadow": {
     "active": null,
-    "checked_close": 1795705800000,
+    "checked_close": 1795706400000,
     "last_setup": null,
     "records": [],
     "started_at": 1795695372597,
