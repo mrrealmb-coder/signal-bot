@@ -12,6 +12,7 @@
       "dtc": true,
       "dtc_scalp": true,
       "smc": true,
+      "smc_m10_shadow": true,
       "smc_kinds": [
         "BOS"
       ],

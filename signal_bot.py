@@ -30,6 +30,8 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from movement_watch import run_watch, active_recipients
 from entry_live import run_entry
+from smc_m10_data import TEN as M10_MS, fetch_closed_xaut_m10
+from smc_m10_shadow import tick as tick_m10_shadow
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(HERE, "state.json")
@@ -2198,6 +2200,60 @@ def update_text(config, state, now_ms, inspect):
     return "\n".join(out)
 
 
+def observe_m10_shadow(journal, watch, primary, trend, poll_ms, basis_record, five_minute_bars):
+    """Observe a fresh M10 BOS after the public M15 signal pass, in its own paper journal."""
+    now = int(time.time() * 1000)
+    if 'started_at' not in journal:
+        tick_m10_shadow(journal, None, [], now, 'unknown', market_open)
+    close = now // M10_MS * M10_MS
+    if now // 900_000 != poll_ms // 900_000 or now - poll_ms > 90_000:
+        primary = 'unknown'
+    candidate = None
+    evaluated = False
+    error = None
+    if (watch.get('smc_m10_shadow') and close > journal.get('checked_close', 0) and market_open(close - 1)
+            and smc_hours_ok(close, watch.get('smc_hours_utc'))):
+        basis = basis_record.get('XAUTUSDT')
+        if primary == 'unknown' or trend is None or close > poll_ms:
+            error = 'primary_unavailable'
+        elif basis is None or not 0 <= now // 60_000 - basis_record.get('minute', -100000) <= 15:
+            error = 'basis_unavailable'
+        else:
+            try:
+                bars = fetch_closed_xaut_m10(now, http_json=http_json, hosts=BN_HOSTS, basis=basis,
+                                             market_open=market_open, five_minute_bars=five_minute_bars)
+                if bars[-1]['ct'] + 1 != close:
+                    raise ValueError('Latest M10 candle unavailable')
+                setup = smc_setup(bars, now, M10_MS, tuple(watch['smc_kinds']), trend,
+                                  float(watch.get('smc_min_risk', 0)), watch.get('smc_hours_utc'))
+                if (setup and setup['status'] == 'pending' and setup['time'] == close
+                        and close > journal['started_at']):
+                    candidate = freeze_smc(setup, bars, PAIRS['XAUUSD']['dec'])
+                    candidate['expires'] = close + 6 * 3_600_000
+                evaluated = True
+            except Exception as exc:
+                error = 'structure_' + type(exc).__name__
+    if candidate or journal.get('active'):
+        try:
+            fine = fetch_binance('XAUTUSDT', '1m')
+            observed = int(time.time() * 1000)
+            if observed // 900_000 != poll_ms // 900_000 or observed - poll_ms > 90_000:
+                primary = 'unknown'
+            if candidate and observed >= close + M10_MS:
+                candidate = None
+            tick_m10_shadow(journal, candidate, fine, observed, primary, market_open)
+        except Exception as exc:
+            error = 'minute_' + type(exc).__name__
+            evaluated = False
+    if evaluated:
+        journal['checked_close'] = close
+        if error is None:
+            journal.pop('observation_error', None)
+    if error:
+        journal['observation_error'] = {'close': close, 'reason': error}
+        print('SMC M10 shadow:', error)
+
+
 def main():
     token = os.environ.get("TELEGRAM_TOKEN", "").strip()
     td_key = os.environ.get("TWELVEDATA_KEY", "").strip()
@@ -2841,6 +2897,9 @@ def main():
                 cache[(pair, tf)] = fetch_bars(pair, tf, td_key)
         return cache[(pair, tf)]
 
+    m10_watch = next((item for item in watch if item['pair'] == 'XAUUSD' and item['tf'] == '15m'), {})
+    observe_m10 = m10_watch.get('smc_m10_shadow') or state.get('smc_m10_shadow', {}).get('active')
+    m10_primary, m10_trend = 'unknown', None
     for w in watch:
         pair, tf = w["pair"], w["tf"]
         key = f"{pair}|{tf}"
@@ -2957,6 +3016,14 @@ def main():
                     sma, base = sma_trend_fn(get_daily_for(pair)), htf
                     with_tr = (lambda t, sma=sma, base=base: sma(t) if (base is None or base(t) == sma(t)) else 0)
                     track_smc(key, w, bars, bars[-1]["c"], now_ms, step_ms, kinds, with_tr, htf_tf)
+                    if w is m10_watch and observe_m10 and htf_tf == '1h':
+                        hour_bar = get_bars(pair, htf_tf)[-1]
+                        if all(b.get('_source') == 'binance:XAUTUSDT' and
+                               b['ct'] == (now_ms // step + 1) * step - 1
+                               for b, step in ((bars[-1], step_ms), (hour_bar, 3_600_000))):
+                            rec = state['smc'].get(key, {})
+                            m10_primary = rec['status'] if rec.get('status') in ('pending', 'filled') else 'clear'
+                            m10_trend = with_tr
                     if ct_on:
                         # Чигийн эсрэг: том хугацааны чигийн дагуу, гэхдээ 200 өдрийн чигийн эсрэг
                         against = (lambda t, sma=sma, base=base:
@@ -3049,6 +3116,12 @@ def main():
                  "\nДараагийн шалгалтаар дахин оролдоно. (Өдөрт нэг л удаа анхааруулна.)")
         state["error_day"] = today
 
+    if observe_m10:
+        try:
+            observe_m10_shadow(state.setdefault('smc_m10_shadow', {}), m10_watch, m10_primary, m10_trend,
+                               now_ms, last_fetch.get('gold_basis', {}), cache.get(('XAUUSD', '5m')))
+        except Exception as exc:
+            print('SMC M10 shadow:', type(exc).__name__)
     try:
         with open(FETCH_FILE, "w", encoding="utf-8") as f:
             json.dump(last_fetch, f)

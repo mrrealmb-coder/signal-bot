@@ -2,9 +2,9 @@ name: Signal delivery and entry tests
 on:
   push:
     branches: [main, codex/movement-watch-live, codex/entry-sl-tp, codex/order-flow-admission-20261119]
-    paths: [signal_bot.py, auctionAdmission.mjs, auction_read.mjs, auction_admission.py, amd_confirmation.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
+    paths: [signal_bot.py, auctionAdmission.mjs, auction_read.mjs, auction_admission.py, amd_confirmation.py, smc_frozen.py, 'smc_m10_*.py', movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
   pull_request:
-    paths: [signal_bot.py, auctionAdmission.mjs, auction_read.mjs, auction_admission.py, amd_confirmation.py, smc_frozen.py, movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
+    paths: [signal_bot.py, auctionAdmission.mjs, auction_read.mjs, auction_admission.py, amd_confirmation.py, smc_frozen.py, 'smc_m10_*.py', movement_watch.py, entry_plans.py, entry_live.py, config.json, 'test_*.py', .github/workflows/movement-tests.yml]
 permissions:
   contents: read
 jobs:
