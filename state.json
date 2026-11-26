@@ -1807,6 +1807,14 @@
       "time": 1793141100000
     }
   },
+  "smc_m10_shadow": {
+    "active": null,
+    "checked_close": 1795695000000,
+    "last_setup": null,
+    "records": [],
+    "started_at": 1795695372597,
+    "version": 1
+  },
   "st": {
     "BTCUSD|15m": {
       "dir": -1,
