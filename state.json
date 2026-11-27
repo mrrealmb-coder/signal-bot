@@ -198,36 +198,20 @@
       "status": "done",
       "tf": "15m",
       "time": 1795614300000
-    },
-    "vp|XAUUSD|1h": {
-      "_basis": -4.53,
-      "_source": "binance:PAXGUSDT",
-      "copy": false,
-      "cut": 1795556700000,
-      "dir": -1,
-      "entry": 3564.25,
-      "kind": "day",
-      "led": "vp_d",
-      "pair": "XAUUSD",
-      "px": "PAXGUSDT",
-      "sl": 3595.9994639045444,
-      "status": "done",
-      "tf": "1h",
-      "time": 1795539600000
     }
   },
   "day_announced": true,
   "dtc": {
     "XAUUSD|15m": {
-      "_basis": -4.97,
+      "_basis": -5.69,
       "_source": "binance:XAUTUSDT",
       "dir": -1,
-      "entry": 3795.6899999999996,
+      "entry": 3796.06,
       "sent": null,
-      "sl": 3837.24,
+      "sl": 3827.46,
       "status": "skipped",
-      "time": 1794969900000,
-      "tp": 3712.5899999999992
+      "time": 1794970800000,
+      "tp": 3733.2599999999998
     }
   },
   "dtc_announced": true,
