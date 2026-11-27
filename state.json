@@ -219,15 +219,15 @@
   "day_announced": true,
   "dtc": {
     "XAUUSD|15m": {
-      "_basis": -4.5,
+      "_basis": -4.11,
       "_source": "binance:XAUTUSDT",
       "dir": -1,
-      "entry": 3835.07,
+      "entry": 3825.3700000000003,
       "sent": null,
-      "sl": 3850.94,
+      "sl": 3850.55,
       "status": "skipped",
-      "time": 1794960900000,
-      "tp": 3803.3300000000004
+      "time": 1794961800000,
+      "tp": 3775.0100000000007
     }
   },
   "dtc_announced": true,
